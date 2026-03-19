@@ -5,11 +5,8 @@ Preserves per-second heart rate, running power, stride length, vertical oscillat
 ground contact time, and GPS data.
 """
 
-import xml.etree.ElementTree as ET
-from bisect import bisect_left
-from datetime import datetime, timezone
-from pathlib import Path
 import argparse
+from pathlib import Path
 
 from fit_tool.fit_file_builder import FitFileBuilder
 from fit_tool.profile.messages.record_message import RecordMessage
@@ -20,17 +17,19 @@ from fit_tool.profile.messages.session_message import SessionMessage
 from fit_tool.profile.messages.activity_message import ActivityMessage
 from fit_tool.profile.profile_type import Sport, Manufacturer, FileType, Event, EventType
 
-# Apple Health quantity type identifiers we care about
-METRIC_TYPES = {
-    'HKQuantityTypeIdentifierHeartRate': 'heart_rate',
-    'HKQuantityTypeIdentifierRunningPower': 'power',
-    'HKQuantityTypeIdentifierRunningSpeed': 'speed',
-    'HKQuantityTypeIdentifierRunningVerticalOscillation': 'vertical_oscillation',
-    'HKQuantityTypeIdentifierRunningGroundContactTime': 'ground_contact_time',
-    'HKQuantityTypeIdentifierRunningStrideLength': 'stride_length',
+from parser import MetricIndex, parse_gpx_file, parse_export, METRIC_TYPES, ACTIVITY_TYPE_MAP
+
+# FIT-specific sport mapping (maps the human-readable name from parser to fit-tool Sport enum)
+SPORT_MAP = {
+    'Running': Sport.RUNNING,
+    'Walking': Sport.WALKING,
+    'Biking': Sport.CYCLING,
+    'Hiking': Sport.HIKING,
+    'Swimming': Sport.SWIMMING,
 }
 
-SPORT_MAP = {
+# Also expose the legacy Apple-type -> Sport mapping for backward compatibility in tests
+APPLE_SPORT_MAP = {
     'HKWorkoutActivityTypeRunning': Sport.RUNNING,
     'HKWorkoutActivityTypeWalking': Sport.WALKING,
     'HKWorkoutActivityTypeCycling': Sport.CYCLING,
@@ -44,41 +43,6 @@ def to_fit_ts(dt):
     return int(dt.timestamp() * 1000)
 
 
-class MetricIndex:
-    """Sorted time-series index for a single metric, with nearest-neighbour lookup."""
-
-    def __init__(self):
-        self.timestamps = []
-        self.values = []
-
-    def add(self, dt, value):
-        self.timestamps.append(dt)
-        self.values.append(value)
-
-    def sort(self):
-        pairs = sorted(zip(self.timestamps, self.values), key=lambda x: x[0])
-        self.timestamps = [p[0] for p in pairs]
-        self.values = [p[1] for p in pairs]
-
-    def lookup(self, timestamp, max_gap_seconds=30):
-        if not self.timestamps:
-            return None
-        idx = bisect_left(self.timestamps, timestamp)
-        candidates = []
-        if idx < len(self.timestamps):
-            candidates.append(idx)
-        if idx > 0:
-            candidates.append(idx - 1)
-        best = min(candidates, key=lambda i: abs((self.timestamps[i] - timestamp).total_seconds()))
-        gap = abs((self.timestamps[best] - timestamp).total_seconds())
-        if gap <= max_gap_seconds:
-            return self.values[best]
-        return None
-
-    def __len__(self):
-        return len(self.timestamps)
-
-
 class AppleToFitConverter:
     def __init__(self, export_dir):
         self.export_dir = Path(export_dir)
@@ -86,21 +50,29 @@ class AppleToFitConverter:
         self.routes_dir = self.export_dir / "workout-routes"
         self.metrics = {}
 
+    def parse_gpx_file(self, gpx_file):
+        """Parse GPX file and extract trackpoints."""
+        return parse_gpx_file(gpx_file)
+
     def parse_metrics(self, root):
-        """Parse per-second metric records from export.xml."""
-        for metric_type, name in METRIC_TYPES.items():
-            self.metrics[name] = MetricIndex()
+        """Parse per-second metric records from an already-parsed XML root.
+
+        This method exists for backward compatibility with tests that call it directly.
+        """
+        from parser import METRIC_TYPES as _MT
+        self.metrics = {name: MetricIndex() for name in _MT.values()}
 
         for record in root.findall('.//Record'):
             record_type = record.get('type', '')
-            if record_type not in METRIC_TYPES:
+            if record_type not in _MT:
                 continue
-            name = METRIC_TYPES[record_type]
+            name = _MT[record_type]
             start_date = record.get('startDate', '')
             value = record.get('value', '')
             if not start_date or not value:
                 continue
             try:
+                from datetime import datetime
                 dt = datetime.fromisoformat(start_date)
                 self.metrics[name].add(dt, float(value))
             except (ValueError, TypeError):
@@ -110,79 +82,28 @@ class AppleToFitConverter:
             index.sort()
             print(f"  {name}: {len(index)} records")
 
-    def parse_gpx_file(self, gpx_file):
-        """Parse GPX file and extract trackpoints."""
-        if not gpx_file or not gpx_file.exists():
-            return []
-        try:
-            tree = ET.parse(gpx_file)
-            root = tree.getroot()
-            ns = {'gpx': 'http://www.topografix.com/GPX/1/1'}
-            trackpoints = []
-            for trkpt in root.findall('.//gpx:trkpt', ns):
-                lat = float(trkpt.get('lat', 0))
-                lon = float(trkpt.get('lon', 0))
-                ele_elem = trkpt.find('./gpx:ele', ns)
-                elevation = float(ele_elem.text) if ele_elem is not None and ele_elem.text else 0
-                time_elem = trkpt.find('./gpx:time', ns)
-                if time_elem is not None and time_elem.text:
-                    timestamp = datetime.fromisoformat(time_elem.text.replace('Z', '+00:00'))
-                else:
-                    continue
-                trackpoints.append({
-                    'lat': lat,
-                    'lon': lon,
-                    'elevation': elevation,
-                    'time': timestamp,
-                })
-            return trackpoints
-        except Exception as e:
-            print(f"Error parsing GPX file {gpx_file}: {e}")
-            return []
-
     def extract_workout(self, workout_elem):
-        """Extract workout metadata from XML element."""
-        activity_type = workout_elem.get('workoutActivityType', '')
-        start_date = workout_elem.get('startDate', '')
-        end_date = workout_elem.get('endDate', '')
-        duration = float(workout_elem.get('duration', 0))
+        """Extract workout metadata from XML element.
 
-        if not start_date or not end_date:
+        Returns a dict compatible with create_fit (includes fit-tool Sport enum).
+        """
+        from parser import _extract_workout
+        w = _extract_workout(workout_elem, self.routes_dir)
+        if w is None:
             return None
 
-        sport = SPORT_MAP.get(activity_type, Sport.GENERIC)
-        start_dt = datetime.fromisoformat(start_date)
-        end_dt = datetime.fromisoformat(end_date)
-
-        workout = {
-            'sport': sport,
-            'sport_name': sport.name.lower().replace('_', ' '),
-            'start_time': start_dt,
-            'end_time': end_dt,
-            'duration_seconds': duration * 60,
-            'heart_rate_avg': None,
-            'distance_km': None,
-            'calories': None,
-            'gpx_file': None,
+        fit_sport = SPORT_MAP.get(w['sport'], Sport.GENERIC)
+        return {
+            'sport': fit_sport,
+            'sport_name': w['sport'].lower(),
+            'start_time': w['start_time'],
+            'end_time': w['end_time'],
+            'duration_seconds': w['duration_seconds'],
+            'heart_rate_avg': w['heart_rate']['avg'] if w['heart_rate'] else None,
+            'distance_km': w['distance_km'],
+            'calories': w['calories'],
+            'gpx_file': w['gpx_file'],
         }
-
-        for stat in workout_elem.findall('.//WorkoutStatistics'):
-            stat_type = stat.get('type', '')
-            if 'HeartRate' in stat_type:
-                workout['heart_rate_avg'] = float(stat.get('average', 0))
-            elif 'DistanceWalkingRunning' in stat_type or 'DistanceCycling' in stat_type:
-                workout['distance_km'] = float(stat.get('sum', 0))
-            elif 'ActiveEnergyBurned' in stat_type:
-                workout['calories'] = float(stat.get('sum', 0))
-
-        route_elem = workout_elem.find('.//WorkoutRoute/FileReference')
-        if route_elem is not None:
-            gpx_path = route_elem.get('path', '')
-            if gpx_path.startswith('/workout-routes/'):
-                gpx_filename = gpx_path.replace('/workout-routes/', '')
-                workout['gpx_file'] = self.routes_dir / gpx_filename
-
-        return workout
 
     def create_fit(self, workout, trackpoints):
         """Create a FIT file for a single workout."""
@@ -190,7 +111,6 @@ class AppleToFitConverter:
         start = workout['start_time']
         end = workout['end_time']
 
-        # File ID
         file_id = FileIdMessage()
         file_id.type = FileType.ACTIVITY
         file_id.manufacturer = Manufacturer.DEVELOPMENT
@@ -199,63 +119,58 @@ class AppleToFitConverter:
         file_id.time_created = to_fit_ts(start)
         builder.add(file_id)
 
-        # Timer start event
         event = EventMessage()
         event.event = Event.TIMER
         event.event_type = EventType.START
         event.timestamp = to_fit_ts(start)
         builder.add(event)
 
-        # Records (trackpoints with metrics)
+        # Merge all data streams into time-sorted FIT records.
+        # Each source (GPS, HR, power, etc.) emits records at its own
+        # natural timestamps rather than interpolating.
+        events = []
+
+        # GPS trackpoints
         for tp in trackpoints:
+            events.append((tp['time'], 'gps', tp))
+
+        # Metric records (HR, power, speed, etc.) within the workout window
+        for name, index in self.metrics.items():
+            for i, ts in enumerate(index.timestamps):
+                if start <= ts <= end:
+                    events.append((ts, name, index.values[i]))
+
+        events.sort(key=lambda e: e[0])
+
+        for ts, source, data in events:
             record = RecordMessage()
-            record.timestamp = to_fit_ts(tp['time'])
-            record.position_lat = tp['lat']
-            record.position_long = tp['lon']
-            record.enhanced_altitude = tp['elevation']
+            record.timestamp = to_fit_ts(ts)
 
-            # Heart rate — per-second lookup, fall back to workout average
-            hr = self.metrics['heart_rate'].lookup(tp['time'])
-            if hr is None and workout['heart_rate_avg']:
-                hr = workout['heart_rate_avg']
-            if hr is not None:
-                record.heart_rate = min(int(hr), 255)
-
-            # Running power (watts)
-            power = self.metrics['power'].lookup(tp['time'])
-            if power is not None:
-                record.power = int(power)
-
-            # Speed (Apple exports km/hr, FIT wants m/s)
-            speed = self.metrics['speed'].lookup(tp['time'])
-            if speed is not None:
-                record.enhanced_speed = speed / 3.6  # km/h -> m/s
-
-            # Vertical oscillation (Apple exports cm, FIT wants mm)
-            vo = self.metrics['vertical_oscillation'].lookup(tp['time'])
-            if vo is not None:
-                record.vertical_oscillation = vo * 10  # cm -> mm
-
-            # Ground contact time (Apple exports ms, FIT wants ms)
-            gct = self.metrics['ground_contact_time'].lookup(tp['time'])
-            if gct is not None:
-                record.stance_time = gct
-
-            # Stride length (Apple exports m, FIT wants mm)
-            sl = self.metrics['stride_length'].lookup(tp['time'])
-            if sl is not None:
-                record.step_length = sl * 1000  # m -> mm
+            if source == 'gps':
+                record.position_lat = data['lat']
+                record.position_long = data['lon']
+                record.enhanced_altitude = data['elevation']
+            elif source == 'heart_rate':
+                record.heart_rate = min(int(data), 255)
+            elif source == 'power':
+                record.power = int(data)
+            elif source == 'speed':
+                record.enhanced_speed = data / 3.6  # km/h -> m/s
+            elif source == 'vertical_oscillation':
+                record.vertical_oscillation = data * 10  # cm -> mm
+            elif source == 'ground_contact_time':
+                record.stance_time = data  # ms
+            elif source == 'stride_length':
+                record.step_length = data * 1000  # m -> mm
 
             builder.add(record)
 
-        # Timer stop event
         event_stop = EventMessage()
         event_stop.event = Event.TIMER
         event_stop.event_type = EventType.STOP_ALL
         event_stop.timestamp = to_fit_ts(end)
         builder.add(event_stop)
 
-        # Lap
         lap = LapMessage()
         lap.timestamp = to_fit_ts(end)
         lap.start_time = to_fit_ts(start)
@@ -263,12 +178,11 @@ class AppleToFitConverter:
         lap.total_timer_time = workout['duration_seconds']
         lap.sport = workout['sport']
         if workout['distance_km']:
-            lap.total_distance = workout['distance_km'] * 1000  # km -> m  # km -> m
+            lap.total_distance = workout['distance_km'] * 1000
         if workout['calories']:
             lap.total_calories = int(workout['calories'])
         builder.add(lap)
 
-        # Session
         session = SessionMessage()
         session.timestamp = to_fit_ts(end)
         session.start_time = to_fit_ts(start)
@@ -278,12 +192,11 @@ class AppleToFitConverter:
         session.first_lap_index = 0
         session.num_laps = 1
         if workout['distance_km']:
-            session.total_distance = workout['distance_km'] * 1000  # km -> m
+            session.total_distance = workout['distance_km'] * 1000
         if workout['calories']:
             session.total_calories = int(workout['calories'])
         builder.add(session)
 
-        # Activity
         activity = ActivityMessage()
         activity.timestamp = to_fit_ts(end)
         activity.num_sessions = 1
@@ -301,24 +214,24 @@ class AppleToFitConverter:
         output_dir.mkdir(exist_ok=True)
 
         print("Parsing export.xml...")
-        tree = ET.parse(self.export_xml)
-        root = tree.getroot()
+        workouts_raw, metrics = parse_export(self.export_xml)
+        self.metrics = metrics
 
-        print("Parsing metric records...")
-        self.parse_metrics(root)
-
-        all_workouts = root.findall('.//Workout')
-        print(f"Found {len(all_workouts)} total workouts")
-
+        # Convert parser workouts to FIT-specific shape
         workouts = []
-        for workout_elem in all_workouts:
-            source_name = workout_elem.get('sourceName', '')
-            if 'Apple Watch' in source_name or 'Bharat' in source_name:
-                workout = self.extract_workout(workout_elem)
-                if workout:
-                    workouts.append(workout)
-
-        print(f"Found {len(workouts)} Apple Watch workouts")
+        for w in workouts_raw:
+            fit_sport = SPORT_MAP.get(w['sport'], Sport.GENERIC)
+            workouts.append({
+                'sport': fit_sport,
+                'sport_name': w['sport'].lower(),
+                'start_time': w['start_time'],
+                'end_time': w['end_time'],
+                'duration_seconds': w['duration_seconds'],
+                'heart_rate_avg': w['heart_rate']['avg'] if w['heart_rate'] else None,
+                'distance_km': w['distance_km'],
+                'calories': w['calories'],
+                'gpx_file': w['gpx_file'],
+            })
 
         if activity_filter:
             workouts = [w for w in workouts if activity_filter.lower() in w['sport_name']]
@@ -326,7 +239,7 @@ class AppleToFitConverter:
 
         converted = 0
         for workout in workouts:
-            trackpoints = self.parse_gpx_file(workout['gpx_file'])
+            trackpoints = parse_gpx_file(workout['gpx_file'])
             if not trackpoints:
                 continue
 
