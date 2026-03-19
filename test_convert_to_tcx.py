@@ -9,7 +9,7 @@ import shutil
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from convert_apple_workouts import AppleWorkoutConverter
+from convert_to_tcx import AppleWorkoutConverter
 
 
 class TestAppleWorkoutConverter(unittest.TestCase):
@@ -335,7 +335,7 @@ class TestUtilityFunctions(unittest.TestCase):
     def test_main_function_imports(self):
         """Test that main function and imports work correctly"""
         # This tests that the module can be imported without errors
-        from convert_apple_workouts import main, AppleWorkoutConverter
+        from convert_to_tcx import main, AppleWorkoutConverter
         self.assertTrue(callable(main))
         self.assertTrue(callable(AppleWorkoutConverter))
 

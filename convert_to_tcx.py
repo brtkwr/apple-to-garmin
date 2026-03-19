@@ -7,6 +7,7 @@ Combines workout metadata, heart rate data, and GPS routes from GPX files.
 import xml.etree.ElementTree as ET
 import os
 import re
+from bisect import bisect_left
 from datetime import datetime, timezone
 from pathlib import Path
 import argparse
@@ -16,12 +17,55 @@ class AppleWorkoutConverter:
         self.export_dir = Path(export_dir)
         self.export_xml = self.export_dir / "export.xml"
         self.routes_dir = self.export_dir / "workout-routes"
-        
+        self._hr_timestamps = []
+        self._hr_values = []
+
+    def parse_heart_rate_records(self, root):
+        """Parse per-second heart rate records from export.xml into a sorted list."""
+        hr_records = []
+        for record in root.findall('.//Record[@type="HKQuantityTypeIdentifierHeartRate"]'):
+            start_date = record.get('startDate', '')
+            value = record.get('value', '')
+            if not start_date or not value:
+                continue
+            try:
+                dt = self.parse_apple_date(start_date)
+                hr_records.append((dt, int(float(value))))
+            except (ValueError, TypeError):
+                continue
+        hr_records.sort(key=lambda x: x[0])
+        print(f"Parsed {len(hr_records)} per-second heart rate records")
+        self._hr_timestamps = [r[0] for r in hr_records]
+        self._hr_values = [r[1] for r in hr_records]
+
+    def lookup_heart_rate(self, timestamp, max_gap_seconds=30):
+        """Find the nearest heart rate record for a given timestamp."""
+        if not self._hr_timestamps:
+            return None
+        idx = bisect_left(self._hr_timestamps, timestamp)
+        candidates = []
+        if idx < len(self._hr_timestamps):
+            candidates.append(idx)
+        if idx > 0:
+            candidates.append(idx - 1)
+        best = None
+        best_gap = None
+        for i in candidates:
+            gap = abs((self._hr_timestamps[i] - timestamp).total_seconds())
+            if best_gap is None or gap < best_gap:
+                best_gap = gap
+                best = i
+        if best is not None and best_gap <= max_gap_seconds:
+            return self._hr_values[best]
+        return None
+
     def parse_apple_workouts(self):
         """Parse Apple Watch workouts from export.xml"""
         tree = ET.parse(self.export_xml)
         root = tree.getroot()
-        
+
+        self.parse_heart_rate_records(root)
+
         workouts = []
         all_workouts = root.findall('.//Workout')
         print(f"Found {len(all_workouts)} total workouts")
@@ -235,12 +279,14 @@ class AppleWorkoutConverter:
                 alt_elem = ET.SubElement(trackpoint, 'AltitudeMeters')
                 alt_elem.text = str(tp['elevation'])
                 
-                # Heart rate (interpolate from workout average if not in GPX)
-                if workout_data['heart_rate']:
+                # Heart rate — use per-second records, fall back to workout average
+                hr = self.lookup_heart_rate(tp['time'])
+                if hr is None and workout_data['heart_rate']:
+                    hr = int(workout_data['heart_rate']['avg'])
+                if hr is not None:
                     hr_elem = ET.SubElement(trackpoint, 'HeartRateBpm')
                     hr_value = ET.SubElement(hr_elem, 'Value')
-                    # Use average HR for all points (could be improved with actual HR data)
-                    hr_value.text = str(int(workout_data['heart_rate']['avg']))
+                    hr_value.text = str(hr)
         
         # Creator/device info
         creator = ET.SubElement(activity, 'Creator')

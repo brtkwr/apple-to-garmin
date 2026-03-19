@@ -20,7 +20,7 @@ This directory contains sample Apple Health export data for testing the converte
 To test the converter with this sample data:
 
 ```bash
-python3 convert_apple_workouts.py test_data/
+python3 convert_to_tcx.py test_data/
 ```
 
 Expected output:
