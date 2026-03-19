@@ -490,7 +490,8 @@ class TestFitFileCreation(TestAppleToFitConverter):
 
         parsed = FitFile.from_file(str(output_path))
         records = get_fit_messages(parsed, 'record')
-        self.assertEqual(len(records), len(trackpoints))
+        # Merged streams: GPS records + metric records at their own timestamps
+        self.assertGreater(len(records), len(trackpoints))
 
     def test_fit_records_have_heart_rate(self):
         fit_file, _, _ = self._build_fit_file()
@@ -499,9 +500,8 @@ class TestFitFileCreation(TestAppleToFitConverter):
 
         parsed = FitFile.from_file(str(output_path))
         records = get_fit_messages(parsed, 'record')
-        # All trackpoints should have HR (per-second records are within range)
-        for rec in records:
-            self.assertIsNotNone(rec.heart_rate)
+        hr_records = [r for r in records if r.heart_rate is not None]
+        self.assertGreater(len(hr_records), 0)
 
     def test_fit_records_have_running_power(self):
         fit_file, _, _ = self._build_fit_file()
@@ -510,9 +510,8 @@ class TestFitFileCreation(TestAppleToFitConverter):
 
         parsed = FitFile.from_file(str(output_path))
         records = get_fit_messages(parsed, 'record')
-        # All 3 trackpoints are at times with power records
-        for rec in records:
-            self.assertIsNotNone(rec.power)
+        power_records = [r for r in records if r.power is not None]
+        self.assertGreater(len(power_records), 0)
 
     def test_fit_records_have_stride_length(self):
         fit_file, _, _ = self._build_fit_file()
@@ -521,8 +520,8 @@ class TestFitFileCreation(TestAppleToFitConverter):
 
         parsed = FitFile.from_file(str(output_path))
         records = get_fit_messages(parsed, 'record')
-        for rec in records:
-            self.assertIsNotNone(rec.step_length)
+        stride_records = [r for r in records if r.step_length is not None]
+        self.assertGreater(len(stride_records), 0)
 
     def test_fit_contains_session(self):
         fit_file, workout, _ = self._build_fit_file()

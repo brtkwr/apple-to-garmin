@@ -125,38 +125,43 @@ class AppleToFitConverter:
         event.timestamp = to_fit_ts(start)
         builder.add(event)
 
+        # Merge all data streams into time-sorted FIT records.
+        # Each source (GPS, HR, power, etc.) emits records at its own
+        # natural timestamps rather than interpolating.
+        events = []
+
+        # GPS trackpoints
         for tp in trackpoints:
+            events.append((tp['time'], 'gps', tp))
+
+        # Metric records (HR, power, speed, etc.) within the workout window
+        for name, index in self.metrics.items():
+            for i, ts in enumerate(index.timestamps):
+                if start <= ts <= end:
+                    events.append((ts, name, index.values[i]))
+
+        events.sort(key=lambda e: e[0])
+
+        for ts, source, data in events:
             record = RecordMessage()
-            record.timestamp = to_fit_ts(tp['time'])
-            record.position_lat = tp['lat']
-            record.position_long = tp['lon']
-            record.enhanced_altitude = tp['elevation']
+            record.timestamp = to_fit_ts(ts)
 
-            hr = self.metrics['heart_rate'].lookup(tp['time'])
-            if hr is None and workout['heart_rate_avg']:
-                hr = workout['heart_rate_avg']
-            if hr is not None:
-                record.heart_rate = min(int(hr), 255)
-
-            power = self.metrics['power'].lookup(tp['time'])
-            if power is not None:
-                record.power = int(power)
-
-            speed = self.metrics['speed'].lookup(tp['time'])
-            if speed is not None:
-                record.enhanced_speed = speed / 3.6
-
-            vo = self.metrics['vertical_oscillation'].lookup(tp['time'])
-            if vo is not None:
-                record.vertical_oscillation = vo * 10
-
-            gct = self.metrics['ground_contact_time'].lookup(tp['time'])
-            if gct is not None:
-                record.stance_time = gct
-
-            sl = self.metrics['stride_length'].lookup(tp['time'])
-            if sl is not None:
-                record.step_length = sl * 1000
+            if source == 'gps':
+                record.position_lat = data['lat']
+                record.position_long = data['lon']
+                record.enhanced_altitude = data['elevation']
+            elif source == 'heart_rate':
+                record.heart_rate = min(int(data), 255)
+            elif source == 'power':
+                record.power = int(data)
+            elif source == 'speed':
+                record.enhanced_speed = data / 3.6  # km/h -> m/s
+            elif source == 'vertical_oscillation':
+                record.vertical_oscillation = data * 10  # cm -> mm
+            elif source == 'ground_contact_time':
+                record.stance_time = data  # ms
+            elif source == 'stride_length':
+                record.step_length = data * 1000  # m -> mm
 
             builder.add(record)
 

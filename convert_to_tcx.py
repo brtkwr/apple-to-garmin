@@ -122,7 +122,7 @@ class AppleWorkoutConverter:
                 if hr is not None:
                     hr_elem = ET.SubElement(trackpoint, 'HeartRateBpm')
                     hr_value = ET.SubElement(hr_elem, 'Value')
-                    hr_value.text = str(hr)
+                    hr_value.text = str(int(hr))
 
         creator = ET.SubElement(activity, 'Creator')
         creator.set('xsi:type', 'Device_t')
