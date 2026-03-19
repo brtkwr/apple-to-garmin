@@ -52,6 +52,7 @@ class MetricIndex:
         self.values = [p[1] for p in pairs]
 
     def lookup(self, timestamp, max_gap_seconds=30):
+        """Find the nearest value for a given timestamp."""
         if not self.timestamps:
             return None
         idx = bisect_left(self.timestamps, timestamp)
