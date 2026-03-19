@@ -54,7 +54,7 @@ uv run convert_to_fit.py /path/to/export --output /path/to/fit/files
 TCX is an XML-based format that works everywhere but only supports heart rate, GPS, altitude, distance, and calories. No running dynamics.
 
 ```bash
-python3 convert_apple_workouts.py /path/to/apple_health_export
+python3 convert_to_tcx.py /path/to/apple_health_export
 ```
 
 ## Output Structure
@@ -102,11 +102,7 @@ Apple Health exports contain per-second heart rate records in `export.xml` as `H
 ## Testing
 
 ```bash
-# Using the test runner
-python3 run_tests.py
-
-# Or using unittest directly
-python3 -m unittest test_convert_apple_workouts -v
+uv run pytest -v
 ```
 
 Tests run automatically on GitHub Actions for Python 3.11-3.13.

@@ -17,7 +17,9 @@ class AppleWorkoutConverter:
         self.export_dir = Path(export_dir)
         self.export_xml = self.export_dir / "export.xml"
         self.routes_dir = self.export_dir / "workout-routes"
-        
+        self._hr_timestamps = []
+        self._hr_values = []
+
     def parse_heart_rate_records(self, root):
         """Parse per-second heart rate records from export.xml into a sorted list."""
         hr_records = []
