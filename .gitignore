@@ -53,3 +53,7 @@ export.zip
 
 # Virtual environment
 .venv/
+
+# Xcode user data
+xcuserdata/
+*.xcuserstate

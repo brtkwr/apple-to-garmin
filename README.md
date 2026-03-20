@@ -90,7 +90,39 @@ TCX output also includes a `no_heart_rate/` subfolder for workouts without HR da
 
 ## Heart Rate Data
 
-Apple Health exports contain per-second heart rate records in `export.xml` as `HKQuantityTypeIdentifierHeartRate` entries. Both converters parse these and match them to GPS trackpoints using binary search, falling back to the workout average when no nearby reading exists.
+### From the XML export
+
+Apple Health exports contain `HKQuantityTypeIdentifierHeartRate` records in `export.xml`. The FIT converter emits each HR reading at its original timestamp as a separate record alongside the GPS stream — no interpolation, highest resolution available from the export.
+
+### Known limitation: low-resolution HR during workouts
+
+Apple's "Export All Health Data" feature aggregates workout heart rate into ~15 minute chunks. A 65-minute run might only have 23 HR records in the export, while apps like Strava (which sync via HealthKit's API directly) show a smooth per-second curve. This is a [known issue](https://discussions.apple.com/thread/253843222).
+
+The per-second data exists on the iPhone via `HKQuantitySeriesSampleQuery`, but Apple doesn't include it in the XML export.
+
+### HealthKit Exporter iOS app
+
+The `HealthKitExporter/` directory contains a SwiftUI iOS app that reads full-resolution HR and running dynamics directly from HealthKit and serves them as JSON over a local HTTP server. This bypasses the XML export limitation.
+
+To use it:
+
+1. Open `HealthKitExporter.xcodeproj` in Xcode
+2. Set your development team in Signing & Capabilities
+3. Build and run on your iPhone
+4. The app shows the device IP and port — hit the endpoints from your Mac:
+
+```bash
+# List all workouts
+curl http://<iphone-ip>:8080/workouts
+
+# Get per-second HR for a specific workout
+curl http://<iphone-ip>:8080/workouts/0/heart_rate
+
+# Get all metrics (HR, power, speed, stride, VO, GCT)
+curl http://<iphone-ip>:8080/workouts/0/metrics
+```
+
+Requires Xcode and a free Apple Developer account (app expires after 7 days, re-install from Xcode as needed).
 
 ## Importing to Garmin Connect
 
