@@ -1,4 +1,3 @@
-import AVFoundation
 import Foundation
 import HealthKit
 import Network
@@ -8,12 +7,24 @@ final class HTTPServer: ObservableObject {
     @Published var isRunning = false
     @Published var localIPAddress: String = "unknown"
     @Published var port: UInt16 = 8080
+    @Published var logEntries: [LogEntry] = []
 
     var healthKitManager: HealthKitManager?
 
     private var listener: NWListener?
     private var cachedWorkouts: [HKWorkout]?
-    private var audioPlayer: AVAudioPlayer?
+
+    struct LogEntry: Identifiable {
+        let id = UUID()
+        let timestamp = Date()
+        let path: String
+        let status: Int
+        let detail: String
+    }
+
+    private func log(_ path: String, status: Int, detail: String = "") {
+        logEntries.append(LogEntry(path: path, status: status, detail: detail))
+    }
 
     func start() {
         // Stop any existing listener first
@@ -55,7 +66,6 @@ final class HTTPServer: ObservableObject {
 
         listener?.start(queue: .global(qos: .userInitiated))
         localIPAddress = Self.getLocalIPAddress()
-        startBackgroundAudio()
     }
 
     func stop() {
@@ -63,42 +73,6 @@ final class HTTPServer: ObservableObject {
         listener = nil
         isRunning = false
         cachedWorkouts = nil
-        audioPlayer?.stop()
-        audioPlayer = nil
-    }
-
-    // Keep the app alive when screen is off by playing silent audio
-    private func startBackgroundAudio() {
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, options: .mixWithOthers)
-        try? session.setActive(true)
-
-        // Generate 1 second of silence
-        let sampleRate = 44100.0
-        let samples = Int(sampleRate)
-        var data = Data()
-        // WAV header
-        let dataSize = UInt32(samples * 2)
-        let fileSize = UInt32(36 + dataSize)
-        data.append(contentsOf: "RIFF".utf8)
-        data.append(contentsOf: withUnsafeBytes(of: fileSize.littleEndian) { Array($0) })
-        data.append(contentsOf: "WAVE".utf8)
-        data.append(contentsOf: "fmt ".utf8)
-        data.append(contentsOf: withUnsafeBytes(of: UInt32(16).littleEndian) { Array($0) })
-        data.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Array($0) })  // PCM
-        data.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Array($0) })  // mono
-        data.append(contentsOf: withUnsafeBytes(of: UInt32(44100).littleEndian) { Array($0) })
-        data.append(contentsOf: withUnsafeBytes(of: UInt32(88200).littleEndian) { Array($0) })
-        data.append(contentsOf: withUnsafeBytes(of: UInt16(2).littleEndian) { Array($0) })
-        data.append(contentsOf: withUnsafeBytes(of: UInt16(16).littleEndian) { Array($0) })
-        data.append(contentsOf: "data".utf8)
-        data.append(contentsOf: withUnsafeBytes(of: dataSize.littleEndian) { Array($0) })
-        data.append(Data(count: Int(dataSize)))  // silence
-
-        audioPlayer = try? AVAudioPlayer(data: data)
-        audioPlayer?.numberOfLoops = -1  // loop forever
-        audioPlayer?.volume = 0
-        audioPlayer?.play()
     }
 
     // MARK: - Connection handling
@@ -203,8 +177,10 @@ final class HTTPServer: ObservableObject {
                 manager.serialiseWorkout(workout, index: index)
             }
 
+            log("/workouts", status: 200, detail: "\(workouts.count) workouts")
             sendJSONResponse(connection: connection, object: serialised)
         } catch {
+            log("/workouts", status: 500, detail: error.localizedDescription)
             sendResponse(
                 connection: connection, status: 500,
                 body: "{\"error\": \"\(error.localizedDescription)\"}")
@@ -237,8 +213,10 @@ final class HTTPServer: ObservableObject {
             let hrUnit = HKUnit.count().unitDivided(by: .minute())
             let hrData = try await manager.fetchQuantitySeries(
                 for: workout, quantityType: hrType, unit: hrUnit)
+            log("/workouts/\(index)/heart_rate", status: 200, detail: "\(hrData.count) points")
             sendJSONResponse(connection: connection, object: hrData)
         } catch {
+            log("/workouts/\(index)/heart_rate", status: 500, detail: error.localizedDescription)
             sendResponse(
                 connection: connection, status: 500,
                 body: "{\"error\": \"\(error.localizedDescription)\"}")
@@ -267,8 +245,11 @@ final class HTTPServer: ObservableObject {
             }
 
             let metrics = try await manager.fetchAllMetrics(for: workouts[index])
+            let totalPoints = (metrics.values.compactMap { ($0 as? [[String: Any]])?.count }.reduce(0, +))
+            log("/workouts/\(index)/metrics", status: 200, detail: "\(totalPoints) points")
             sendJSONResponse(connection: connection, object: metrics)
         } catch {
+            log("/workouts/\(index)/metrics", status: 500, detail: error.localizedDescription)
             sendResponse(
                 connection: connection, status: 500,
                 body: "{\"error\": \"\(error.localizedDescription)\"}")
@@ -297,6 +278,7 @@ final class HTTPServer: ObservableObject {
             }
 
             let route = try await manager.fetchRoute(for: workouts[index])
+            log("/workouts/\(index)/route", status: 200, detail: "\(route.count) points")
             sendJSONResponse(connection: connection, object: route)
         } catch {
             sendResponse(

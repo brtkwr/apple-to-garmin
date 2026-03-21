@@ -155,6 +155,16 @@ final class HealthKitManager: ObservableObject {
             }
         }
 
+        // Include GPS route
+        do {
+            let route = try await fetchRoute(for: workout)
+            if !route.isEmpty {
+                metrics["route"] = route
+            }
+        } catch {
+            // No route available for this workout
+        }
+
         return metrics
     }
 

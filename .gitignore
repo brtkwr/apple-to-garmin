@@ -56,5 +56,8 @@ export.zip
 
 # Xcode user data
 xcuserdata/
-*.xcuserstatehealthkit_export/
+*.xcuserstate
+
+# HealthKit export data
+healthkit_export/
 fit_files_hk/

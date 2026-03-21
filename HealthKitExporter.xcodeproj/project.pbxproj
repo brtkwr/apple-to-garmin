@@ -11,6 +11,7 @@
 		J5TXBE3367ZPSMM9XM31GJK4 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = GUCON8Y6UD5OE3R1TRMKWHUL /* ContentView.swift */; };
 		K1LMWNUWDV1QFDC2XT9HRNAF /* HealthKitExporterApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BZ89J5KQ75FMR24GVOW94E7Z /* HealthKitExporterApp.swift */; };
 		MALGOCTIA1BGC1YKGVVDNYU3 /* HTTPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = U1PZ15W8YTBHHZSZJVCO97CA /* HTTPServer.swift */; };
+		APPICON0001BUILDFILE00001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = APPICON0001FILEREF00001 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -21,6 +22,7 @@
 		GUCON8Y6UD5OE3R1TRMKWHUL /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		TMIHXBZUC47MM7UIU8GOPQBB /* HealthKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitManager.swift; sourceTree = "<group>"; };
 		U1PZ15W8YTBHHZSZJVCO97CA /* HTTPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPServer.swift; sourceTree = "<group>"; };
+		APPICON0001FILEREF00001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,6 +53,7 @@
 				U1PZ15W8YTBHHZSZJVCO97CA /* HTTPServer.swift */,
 				0ZOBS1D5K6R6FYO2HYQYM1HH /* Info.plist */,
 				5UB3YE09T8QK1XIJFCVPUVIL /* HealthKitExporter.entitlements */,
+				APPICON0001FILEREF00001 /* Assets.xcassets */,
 			);
 			path = HealthKitExporter;
 			sourceTree = "<group>";
@@ -121,6 +124,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				APPICON0001BUILDFILE00001 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -152,7 +156,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = HealthKitExporter/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "HK Exporter";
+				INFOPLIST_KEY_CFBundleDisplayName = "Health Export";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads your workout and health data to export it as JSON over a local HTTP server.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app runs a local HTTP server so you can download your health data from another device on the same network.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -304,7 +308,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = HealthKitExporter/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "HK Exporter";
+				INFOPLIST_KEY_CFBundleDisplayName = "Health Export";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "This app reads your workout and health data to export it as JSON over a local HTTP server.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app runs a local HTTP server so you can download your health data from another device on the same network.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

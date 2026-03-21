@@ -52,18 +52,18 @@ def main():
         print(f"[{i+1}/{len(aw_workouts)}] Fetching metrics for {label} (index {idx})...", end=" ", flush=True)
 
         try:
-            metrics = fetch_json(f"{base}/workouts/{idx}/metrics", timeout=120)
-            route = fetch_json(f"{base}/workouts/{idx}/route", timeout=120)
+            # Metrics response includes route data
+            data = fetch_json(f"{base}/workouts/{idx}/metrics", timeout=120)
+            route = data.pop('route', [])
             workout_file = output_dir / f"{label}_{idx}.json"
             with open(workout_file, "w") as f:
                 json.dump({
                     "workout": workout,
-                    "metrics": metrics,
+                    "metrics": data,
                     "route": route,
                 }, f)
 
-            # Count data points
-            total_points = sum(len(v) for v in metrics.values() if isinstance(v, list))
+            total_points = sum(len(v) for v in data.values() if isinstance(v, list))
             print(f"{total_points} metric points, {len(route)} GPS points")
         except Exception as e:
             print(f"FAILED: {e}")

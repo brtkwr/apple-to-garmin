@@ -9,4 +9,11 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=7.0.0",
 ]
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+show_missing = true

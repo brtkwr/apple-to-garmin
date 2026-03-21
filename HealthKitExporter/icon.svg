@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="heartGrad" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#FF6B9D"/>
+      <stop offset="100%" stop-color="#FF6347"/>
+    </linearGradient>
+  </defs>
+
+  <!-- White background -->
+  <rect width="1024" height="1024" fill="white"/>
+
+  <!-- Heart, taller proportions, centred -->
+  <g transform="translate(512, 540)">
+    <path d="M0 230 C0 230 -310 30 -310 -110 C-310 -230 -220 -300 -145 -300 C-75 -300 -30 -255 0 -210 C30 -255 75 -300 145 -300 C220 -300 310 -230 310 -110 C310 30 0 230 0 230Z"
+      fill="url(#heartGrad)"
+    />
+  </g>
+
+  <!-- Export arrow centred visually in the heart -->
+  <g transform="translate(512, 480)">
+    <path d="M-85 20 L-85 85 L85 85 L85 20" fill="none" stroke="white" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="0" y1="58" x2="0" y2="-62" stroke="white" stroke-width="22" stroke-linecap="round"/>
+    <polyline points="-40,-25 0,-62 40,-25" fill="none" stroke="white" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

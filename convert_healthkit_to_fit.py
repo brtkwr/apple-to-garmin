@@ -18,7 +18,6 @@ from fit_tool.profile.messages.session_message import SessionMessage
 from fit_tool.profile.messages.activity_message import ActivityMessage
 from fit_tool.profile.profile_type import Sport, Manufacturer, FileType, Event, EventType
 
-from parser import parse_gpx_file
 
 SPORT_MAP = {
     'running': Sport.RUNNING,
@@ -155,31 +154,16 @@ def create_fit(workout, metrics, trackpoints):
     return builder.build()
 
 
-def find_gpx_file(workout, routes_dir):
-    """Try to find a matching GPX file for a workout by date."""
-    if not routes_dir or not routes_dir.exists():
-        return None
-    start = parse_iso(workout['start_date'])
-    # GPX files are named like route_2024-01-02_7.30pm.gpx
-    # Search by date prefix
-    date_str = start.strftime('%Y-%m-%d')
-    for gpx in routes_dir.glob(f'route_{date_str}*.gpx'):
-        return gpx
-    return None
-
-
 def main():
     parser = argparse.ArgumentParser(
         description='Convert HealthKit JSON export to FIT for Garmin Connect')
     parser.add_argument('healthkit_dir', help='Path to healthkit_export directory')
-    parser.add_argument('--gpx-dir', '-g', help='Path to workout-routes directory for GPS data')
     parser.add_argument('--output', '-o', help='Output directory for FIT files')
     parser.add_argument('--activity', '-a', help='Filter by activity type')
     args = parser.parse_args()
 
     hk_dir = Path(args.healthkit_dir)
-    routes_dir = Path(args.gpx_dir) if args.gpx_dir else None
-    output_dir = Path(args.output) if args.output else Path('fit_files_hk')
+    output_dir = Path(args.output) if args.output else Path('fit_files')
     output_dir.mkdir(exist_ok=True)
 
     # Load workout list
@@ -211,23 +195,16 @@ def main():
             skipped += 1
             continue
 
-        # GPS data — prefer HealthKit route, fall back to GPX files
-        route_data = data.get('route', [])
-        if route_data:
-            trackpoints = []
-            for pt in route_data:
-                ts = datetime.fromtimestamp(pt['timestamp'], tz=timezone.utc)
-                trackpoints.append({
-                    'time': ts,
-                    'lat': pt['latitude'],
-                    'lon': pt['longitude'],
-                    'elevation': pt['altitude'],
-                })
-        elif routes_dir:
-            gpx_file = find_gpx_file(workout, routes_dir)
-            trackpoints = parse_gpx_file(gpx_file) if gpx_file else []
-        else:
-            trackpoints = []
+        # GPS data from HealthKit route
+        trackpoints = []
+        for pt in data.get('route', []):
+            ts = datetime.fromtimestamp(pt['timestamp'], tz=timezone.utc)
+            trackpoints.append({
+                'time': ts,
+                'lat': pt['latitude'],
+                'lon': pt['longitude'],
+                'elevation': pt['altitude'],
+            })
 
         try:
             fit_file = create_fit(workout, metrics, trackpoints)
