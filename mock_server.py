@@ -158,7 +158,7 @@ class MockHealthKitHandler(BaseHTTPRequestHandler):
             self._send_json(self.workouts or [])
             return
 
-        match = re.match(r"^/workouts/(\d+)/metrics$", self.path)
+        match = re.match(r"^/workouts/(\d+)$", self.path)
         if match:
             idx = int(match.group(1))
             if 0 <= idx < len(self.workouts or []):
@@ -210,7 +210,7 @@ def main():
     print(f"Serving {num_workouts} sample workouts")
     print("Endpoints:")
     print("  GET /workouts")
-    print("  GET /workouts/{index}/metrics")
+    print("  GET /workouts/{index}")
     print("  GET /workouts/{index}/heart_rate")
     try:
         server.serve_forever()

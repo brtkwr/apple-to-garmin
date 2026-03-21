@@ -85,10 +85,10 @@ This is a [known limitation](https://discussions.apple.com/thread/253843222) of 
 
 The iOS app serves JSON on port 8080:
 
-| Endpoint                        | Description                           |
-| ------------------------------- | ------------------------------------- |
-| `GET /workouts`                 | List all workouts with metadata       |
-| `GET /workouts/{index}/metrics` | All metrics + GPS route for a workout |
+| Endpoint               | Description                           |
+| ---------------------- | ------------------------------------- |
+| `GET /workouts`        | List all workouts with metadata       |
+| `GET /workouts/{index}` | All metrics + GPS route for a workout |
 
 ## Development
 

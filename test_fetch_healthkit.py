@@ -114,7 +114,7 @@ class TestMockServer(unittest.TestCase):
         self.assertIn("activity_type", data[0])
 
     def test_metrics_endpoint(self):
-        data = self._fetch("/workouts/0/metrics")
+        data = self._fetch("/workouts/0")
         self.assertIn("heart_rate", data)
         self.assertIn("route", data)
         self.assertGreater(len(data["heart_rate"]), 0)
@@ -122,7 +122,7 @@ class TestMockServer(unittest.TestCase):
     def test_metrics_endpoint_invalid_index(self):
         import urllib.error
         with self.assertRaises(urllib.error.HTTPError) as ctx:
-            self._fetch("/workouts/999/metrics")
+            self._fetch("/workouts/999")
         self.assertEqual(ctx.exception.code, 404)
 
     def test_404_for_unknown_path(self):

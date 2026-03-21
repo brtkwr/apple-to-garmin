@@ -53,7 +53,7 @@ def main():
 
         try:
             # Metrics response includes route data
-            data = fetch_json(f"{base}/workouts/{idx}/metrics", timeout=120)
+            data = fetch_json(f"{base}/workouts/{idx}", timeout=120)
             route = data.pop('route', [])
             workout_file = output_dir / f"{label}_{idx}.json"
             with open(workout_file, "w") as f:

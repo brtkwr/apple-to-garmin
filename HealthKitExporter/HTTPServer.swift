@@ -128,16 +128,16 @@ final class HTTPServer: ObservableObject {
             return
         }
 
-        if let index = parseWorkoutSubpath(path: path, suffix: "metrics") {
-            await handleGetMetrics(connection: connection, index: index)
+        if let index = parseWorkoutIndex(path: path) {
+            await handleGetWorkout(connection: connection, index: index)
             return
         }
 
         sendResponse(connection: connection, status: 404, body: "{\"error\": \"Not found\"}")
     }
 
-    private func parseWorkoutSubpath(path: String, suffix: String) -> Int? {
-        let pattern = "^/workouts/(\\d+)/\(suffix)$"
+    private func parseWorkoutIndex(path: String) -> Int? {
+        let pattern = "^/workouts/(\\d+)$"
         guard let regex = try? NSRegularExpression(pattern: pattern),
             let match = regex.firstMatch(
                 in: path, range: NSRange(path.startIndex..., in: path)),
@@ -178,7 +178,7 @@ final class HTTPServer: ObservableObject {
     }
 
     @MainActor
-    private func handleGetMetrics(connection: NWConnection, index: Int) async {
+    private func handleGetWorkout(connection: NWConnection, index: Int) async {
         guard let manager = healthKitManager else {
             sendResponse(
                 connection: connection, status: 500,
@@ -198,13 +198,13 @@ final class HTTPServer: ObservableObject {
                 return
             }
 
-            let metrics = try await manager.fetchAllMetrics(for: workouts[index])
-            let routeCount = (metrics["route"] as? [[String: Any]])?.count ?? 0
-            let metricCount = metrics.values.compactMap { ($0 as? [[String: Any]])?.count }.reduce(0, +) - routeCount
-            log("/workouts/\(index)/metrics", status: 200, detail: "\(metricCount) metrics, \(routeCount) GPS")
-            sendJSONResponse(connection: connection, object: metrics)
+            let data = try await manager.fetchAllMetrics(for: workouts[index])
+            let routeCount = (data["route"] as? [[String: Any]])?.count ?? 0
+            let metricCount = data.values.compactMap { ($0 as? [[String: Any]])?.count }.reduce(0, +) - routeCount
+            log("/workouts/\(index)", status: 200, detail: "\(metricCount) metrics, \(routeCount) GPS")
+            sendJSONResponse(connection: connection, object: data)
         } catch {
-            log("/workouts/\(index)/metrics", status: 500, detail: error.localizedDescription)
+            log("/workouts/\(index)", status: 500, detail: error.localizedDescription)
             sendResponse(
                 connection: connection, status: 500,
                 body: "{\"error\": \"\(error.localizedDescription)\"}")
