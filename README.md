@@ -8,16 +8,16 @@ Apple's "Export All Health Data" aggregates workout heart rate into low-resoluti
 
 ```mermaid
 graph LR
-    A[HealthKit on iPhone] -->|HTTP JSON| B[fetch_healthkit.py]
-    B -->|apple_health_export/*.json| C[convert_healthkit_to_fit.py]
-    C -->|fit_files/*.fit| D[upload_to_garmin.py]
+    A[HealthKit on iPhone] -->|HTTP JSON| B[fetch-healthkit]
+    B -->|apple_health_export/*.json| C[convert-to-fit]
+    C -->|fit_files/*.fit| D[upload-to-garmin]
     D -->|Garmin API| E[Garmin Connect]
 ```
 
 1. **iOS app** serves workout data from HealthKit over a local HTTP server
-2. **Fetch script** pulls all workouts (metrics + GPS) from the phone to your Mac
-3. **Converter** produces FIT files with linearly interpolated metrics
-4. **Upload script** pushes FIT files to Garmin Connect via the API
+2. **fetch-healthkit** pulls all workouts (metrics + GPS) from the phone to your Mac
+3. **convert-to-fit** produces FIT files with linearly interpolated metrics
+4. **upload-to-garmin** pushes FIT files to Garmin Connect via the API
 
 ## Requirements
 
@@ -44,7 +44,7 @@ cd apple-health-export
 Open the app on your iPhone, tap **Start**, then from your Mac:
 
 ```bash
-python3 health_export/fetch_healthkit.py <iphone-ip>
+uv run fetch-healthkit <iphone-ip>
 ```
 
 This pulls all Apple Watch workouts with full-resolution metrics and GPS routes into `apple_health_export/`. Keep the phone screen on while fetching — HealthKit data is inaccessible when the screen is locked.
@@ -52,7 +52,7 @@ This pulls all Apple Watch workouts with full-resolution metrics and GPS routes 
 ### 3. Convert to FIT
 
 ```bash
-uv run health_export/convert_healthkit_to_fit.py apple_health_export
+uv run convert-to-fit apple_health_export
 ```
 
 FIT files are written to `fit_files/`, organised by year and month.
@@ -60,17 +60,17 @@ FIT files are written to `fit_files/`, organised by year and month.
 Filter by activity type:
 
 ```bash
-uv run health_export/convert_healthkit_to_fit.py apple_health_export --activity running
+uv run convert-to-fit apple_health_export --activity running
 ```
 
 ### 4. Upload to Garmin Connect
 
 ```bash
 # First time: log in and save tokens
-uv run health_export/login_garmin.py
+uv run login-garmin
 
 # Upload all FIT files
-uv run health_export/upload_to_garmin.py fit_files
+uv run upload-to-garmin fit_files
 ```
 
 Set `GARMIN_EMAIL` and `GARMIN_PASSWORD` as environment variables. MFA is supported — you'll be prompted for the code on first login. Tokens are saved to `~/.garmin_tokens/` for subsequent runs.
@@ -78,7 +78,7 @@ Set `GARMIN_EMAIL` and `GARMIN_PASSWORD` as environment variables. MFA is suppor
 Use `--dry-run` to preview without uploading:
 
 ```bash
-uv run health_export/upload_to_garmin.py fit_files --dry-run
+uv run upload-to-garmin fit_files --dry-run
 ```
 
 Or import manually: go to [Garmin Connect](https://connect.garmin.com), click **"+"** → Import Data, and upload your FIT files.

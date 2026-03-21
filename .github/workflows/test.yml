@@ -46,7 +46,7 @@ jobs:
 
     - name: 🔍 Run basic smoke tests
       run: |
-        uv run python health_export/convert_healthkit_to_fit.py --help
+        uv run convert-to-fit --help
 
   lint:
     runs-on: ubuntu-latest

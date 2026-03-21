@@ -1,11 +1,24 @@
 [project]
-name = "apple-to-garmin"
+name = "apple-health-export"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "fit-tool>=0.9.15",
     "garminconnect>=0.2.40",
 ]
+
+[project.scripts]
+fetch-healthkit = "health_export.fetch_healthkit:main"
+convert-to-fit = "health_export.convert_healthkit_to_fit:main"
+login-garmin = "health_export.login_garmin:main"
+upload-to-garmin = "health_export.upload_to_garmin:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["health_export"]
 
 [dependency-groups]
 dev = [

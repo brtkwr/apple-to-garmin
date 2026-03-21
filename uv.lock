@@ -12,9 +12,9 @@ wheels = [
 ]
 
 [[package]]
-name = "apple-to-garmin"
+name = "apple-health-export"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "fit-tool" },
     { name = "garminconnect" },
