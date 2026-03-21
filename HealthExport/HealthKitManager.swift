@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import HealthKit
 
@@ -30,7 +31,10 @@ final class HealthKitManager: ObservableObject {
             return
         }
 
-        var typesToRead: Set<HKObjectType> = [HKObjectType.workoutType()]
+        var typesToRead: Set<HKObjectType> = [
+            HKObjectType.workoutType(),
+            HKSeriesType.workoutRoute(),
+        ]
         for id in Self.quantityTypes {
             if let qt = HKQuantityType.quantityType(forIdentifier: id) {
                 typesToRead.insert(qt)
@@ -151,7 +155,79 @@ final class HealthKitManager: ObservableObject {
             }
         }
 
+        // Include GPS route
+        do {
+            let route = try await fetchRoute(for: workout)
+            if !route.isEmpty {
+                metrics["route"] = route
+            }
+        } catch {
+            // No route available for this workout
+        }
+
         return metrics
+    }
+
+    // MARK: - Fetch workout route (GPS)
+
+    func fetchRoute(for workout: HKWorkout) async throws -> [[String: Any]] {
+        // First, get the HKWorkoutRoute objects associated with this workout
+        let routeType = HKSeriesType.workoutRoute()
+        let predicate = HKQuery.predicateForObjects(from: workout)
+
+        let routes: [HKWorkoutRoute] = try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: routeType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: (samples as? [HKWorkoutRoute]) ?? [])
+                }
+            }
+            healthStore.execute(query)
+        }
+
+        guard let route = routes.first else {
+            return []
+        }
+
+        // Then extract the CLLocation data from the route
+        return try await withCheckedThrowingContinuation { continuation in
+            var locations: [[String: Any]] = []
+            let formatter = ISO8601DateFormatter()
+
+            let query = HKWorkoutRouteQuery(route: route) { _, newLocations, done, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                if let newLocations {
+                    for loc in newLocations {
+                        locations.append([
+                            "latitude": loc.coordinate.latitude,
+                            "longitude": loc.coordinate.longitude,
+                            "altitude": loc.altitude,
+                            "timestamp": loc.timestamp.timeIntervalSince1970,
+                            "date": formatter.string(from: loc.timestamp),
+                            "horizontal_accuracy": loc.horizontalAccuracy,
+                            "vertical_accuracy": loc.verticalAccuracy,
+                            "speed": loc.speed,
+                            "course": loc.course,
+                        ])
+                    }
+                }
+
+                if done {
+                    continuation.resume(returning: locations)
+                }
+            }
+            healthStore.execute(query)
+        }
     }
 
     // MARK: - Serialise workout metadata

@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct HealthKitExporterApp: App {
+struct HealthExportApp: App {
     @StateObject private var healthKitManager = HealthKitManager()
     @StateObject private var httpServer = HTTPServer()
 

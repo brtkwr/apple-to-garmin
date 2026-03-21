@@ -2,16 +2,24 @@ name: 🧪 Run Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+        include:
+          - python-version: '3.14'
+            coverage: true
 
     steps:
     - name: 📥 Checkout code
@@ -27,40 +35,55 @@ jobs:
 
     - name: 🧪 Run tests
       run: |
-        uv run pytest -v
+        uv run pytest tests/ --cov=health_export --cov-report=xml:coverage.xml --cov-report=term-missing -v
+
+    - name: 📊 Coverage report
+      uses: orgoro/coverage@v3.2
+      if: ${{ github.event_name == 'pull_request' && matrix.coverage }}
+      with:
+        coverageFile: coverage.xml
+        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: 🔍 Run basic smoke tests
       run: |
-        python convert_to_tcx.py --help
-        uv run convert_to_fit.py --help
+        uv run convert-to-fit --help
 
   lint:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
-      
+
     - name: 🐍 Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-        
+
     - name: 📦 Install uv
       uses: astral-sh/setup-uv@v4
 
     - name: 🔍 Check Python syntax
       run: |
-        python -m py_compile convert_to_tcx.py
-        python -m py_compile convert_to_fit.py
-        python -m py_compile test_convert_to_tcx.py
-        
-    - name: 📊 Check code structure
+        python -m py_compile health_export/convert_healthkit_to_fit.py
+        python -m py_compile health_export/fetch_healthkit.py
+        python -m py_compile health_export/upload_to_garmin.py
+        python -m py_compile health_export/login_garmin.py
+
+  build-ios:
+    runs-on: macos-latest
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🍎 Build iOS app
       run: |
-        echo "Checking for TODO/FIXME comments..."
-        grep -n "TODO\|FIXME" *.py || echo "No TODOs found ✅"
-        
-        echo "Checking file sizes..."
-        wc -l *.py
-        
-        echo "All code structure checks completed ✅"
+        xcodebuild -project HealthExport.xcodeproj \
+          -scheme HealthExport \
+          -destination 'generic/platform=iOS Simulator' \
+          -allowProvisioningUpdates \
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGNING_ALLOWED=NO \
+          build

@@ -43,13 +43,7 @@ temp/
 tmp/
 
 # Output files
-tcx_files/
 fit_files/
-no_heart_rate/
-
-# Apple Health export data
-apple_health_export/
-export.zip
 
 # Virtual environment
 .venv/
@@ -57,3 +51,10 @@ export.zip
 # Xcode user data
 xcuserdata/
 *.xcuserstate
+
+# HealthKit export data
+apple_health_export*
+
+# Local data
+garmin_activities.txt
+.envrc

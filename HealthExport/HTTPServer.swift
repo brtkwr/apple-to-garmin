@@ -7,13 +7,30 @@ final class HTTPServer: ObservableObject {
     @Published var isRunning = false
     @Published var localIPAddress: String = "unknown"
     @Published var port: UInt16 = 8080
+    @Published var logEntries: [LogEntry] = []
 
     var healthKitManager: HealthKitManager?
 
     private var listener: NWListener?
     private var cachedWorkouts: [HKWorkout]?
 
+    struct LogEntry: Identifiable {
+        let id = UUID()
+        let timestamp = Date()
+        let path: String
+        let status: Int
+        let detail: String
+    }
+
+    private func log(_ path: String, status: Int, detail: String = "") {
+        logEntries.append(LogEntry(path: path, status: status, detail: detail))
+    }
+
     func start() {
+        // Stop any existing listener first
+        listener?.cancel()
+        listener = nil
+
         do {
             let params = NWParameters.tcp
             params.allowLocalEndpointReuse = true
@@ -111,21 +128,16 @@ final class HTTPServer: ObservableObject {
             return
         }
 
-        if let index = parseWorkoutSubpath(path: path, suffix: "heart_rate") {
-            await handleGetHeartRate(connection: connection, index: index)
-            return
-        }
-
-        if let index = parseWorkoutSubpath(path: path, suffix: "metrics") {
-            await handleGetMetrics(connection: connection, index: index)
+        if let index = parseWorkoutIndex(path: path) {
+            await handleGetWorkout(connection: connection, index: index)
             return
         }
 
         sendResponse(connection: connection, status: 404, body: "{\"error\": \"Not found\"}")
     }
 
-    private func parseWorkoutSubpath(path: String, suffix: String) -> Int? {
-        let pattern = "^/workouts/(\\d+)/\(suffix)$"
+    private func parseWorkoutIndex(path: String) -> Int? {
+        let pattern = "^/workouts/(\\d+)$"
         guard let regex = try? NSRegularExpression(pattern: pattern),
             let match = regex.firstMatch(
                 in: path, range: NSRange(path.startIndex..., in: path)),
@@ -155,8 +167,10 @@ final class HTTPServer: ObservableObject {
                 manager.serialiseWorkout(workout, index: index)
             }
 
+            log("/workouts", status: 200, detail: "\(workouts.count) workouts")
             sendJSONResponse(connection: connection, object: serialised)
         } catch {
+            log("/workouts", status: 500, detail: error.localizedDescription)
             sendResponse(
                 connection: connection, status: 500,
                 body: "{\"error\": \"\(error.localizedDescription)\"}")
@@ -164,7 +178,7 @@ final class HTTPServer: ObservableObject {
     }
 
     @MainActor
-    private func handleGetHeartRate(connection: NWConnection, index: Int) async {
+    private func handleGetWorkout(connection: NWConnection, index: Int) async {
         guard let manager = healthKitManager else {
             sendResponse(
                 connection: connection, status: 500,
@@ -184,43 +198,13 @@ final class HTTPServer: ObservableObject {
                 return
             }
 
-            let workout = workouts[index]
-            let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
-            let hrUnit = HKUnit.count().unitDivided(by: .minute())
-            let hrData = try await manager.fetchQuantitySeries(
-                for: workout, quantityType: hrType, unit: hrUnit)
-            sendJSONResponse(connection: connection, object: hrData)
+            let data = try await manager.fetchAllMetrics(for: workouts[index])
+            let routeCount = (data["route"] as? [[String: Any]])?.count ?? 0
+            let metricCount = data.values.compactMap { ($0 as? [[String: Any]])?.count }.reduce(0, +) - routeCount
+            log("/workouts/\(index)", status: 200, detail: "\(metricCount) metrics, \(routeCount) GPS")
+            sendJSONResponse(connection: connection, object: data)
         } catch {
-            sendResponse(
-                connection: connection, status: 500,
-                body: "{\"error\": \"\(error.localizedDescription)\"}")
-        }
-    }
-
-    @MainActor
-    private func handleGetMetrics(connection: NWConnection, index: Int) async {
-        guard let manager = healthKitManager else {
-            sendResponse(
-                connection: connection, status: 500,
-                body: "{\"error\": \"HealthKit not available\"}")
-            return
-        }
-
-        do {
-            if cachedWorkouts == nil {
-                cachedWorkouts = try await manager.fetchWorkouts()
-            }
-
-            guard let workouts = cachedWorkouts, index >= 0, index < workouts.count else {
-                sendResponse(
-                    connection: connection, status: 404,
-                    body: "{\"error\": \"Workout not found at index \(index)\"}")
-                return
-            }
-
-            let metrics = try await manager.fetchAllMetrics(for: workouts[index])
-            sendJSONResponse(connection: connection, object: metrics)
-        } catch {
+            log("/workouts/\(index)", status: 500, detail: error.localizedDescription)
             sendResponse(
                 connection: connection, status: 500,
                 body: "{\"error\": \"\(error.localizedDescription)\"}")

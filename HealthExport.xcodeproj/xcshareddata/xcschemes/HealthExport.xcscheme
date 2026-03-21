@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "MF20K0DT1Z9TWS63U3EYGKAV"
-               BuildableName = "HealthKitExporter.app"
-               BlueprintName = "HealthKitExporter"
-               ReferencedContainer = "container:HealthKitExporter.xcodeproj">
+               BuildableName = "HealthExport.app"
+               BlueprintName = "HealthExport"
+               ReferencedContainer = "container:HealthExport.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -45,9 +45,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "MF20K0DT1Z9TWS63U3EYGKAV"
-            BuildableName = "HealthKitExporter.app"
-            BlueprintName = "HealthKitExporter"
-            ReferencedContainer = "container:HealthKitExporter.xcodeproj">
+            BuildableName = "HealthExport.app"
+            BlueprintName = "HealthExport"
+            ReferencedContainer = "container:HealthExport.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -62,9 +62,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "MF20K0DT1Z9TWS63U3EYGKAV"
-            BuildableName = "HealthKitExporter.app"
-            BlueprintName = "HealthKitExporter"
-            ReferencedContainer = "container:HealthKitExporter.xcodeproj">
+            BuildableName = "HealthExport.app"
+            BlueprintName = "HealthExport"
+            ReferencedContainer = "container:HealthExport.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
