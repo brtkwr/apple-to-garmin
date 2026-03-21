@@ -25,7 +25,7 @@ cd apple-to-garmin
 
 ### 1. Install the iOS app
 
-1. Open `HealthKitExporter.xcodeproj` in Xcode
+1. Open `HealthExport.xcodeproj` in Xcode
 2. Set your development team in **Signing & Capabilities**
 3. Connect your iPhone via USB and hit **Run**
 4. On your iPhone: **Settings > General > VPN & Device Management** → trust the developer certificate

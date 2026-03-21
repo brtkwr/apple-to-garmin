@@ -78,8 +78,8 @@ jobs:
 
     - name: 🍎 Build iOS app
       run: |
-        xcodebuild -project HealthKitExporter.xcodeproj \
-          -scheme HealthKitExporter \
+        xcodebuild -project HealthExport.xcodeproj \
+          -scheme HealthExport \
           -destination 'generic/platform=iOS Simulator' \
           -allowProvisioningUpdates \
           CODE_SIGN_IDENTITY="-" \

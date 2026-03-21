@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Convert HealthKit JSON export (from the HealthKitExporter iOS app) to FIT files.
+Convert HealthKit JSON export (from the HealthExport iOS app) to FIT files.
 Uses full-resolution heart rate and running dynamics data.
 """
 
