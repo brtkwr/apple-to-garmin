@@ -16,6 +16,9 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.11', '3.12', '3.13', '3.14']
+        include:
+          - python-version: '3.14'
+            coverage: true
 
     steps:
     - name: 📥 Checkout code
@@ -36,7 +39,7 @@ jobs:
 
     - name: 📊 Coverage report
       uses: orgoro/coverage@v3.2
-      if: ${{ github.event_name == 'pull_request' && matrix.python-version == '3.13' }}
+      if: ${{ github.event_name == 'pull_request' && matrix.coverage }}
       with:
         coverageFile: coverage.xml
         token: ${{ secrets.GITHUB_TOKEN }}
