@@ -9,6 +9,7 @@ Apple's "Export All Health Data" aggregates workout heart rate into low-resoluti
 1. **iOS app** serves workout data from HealthKit over a local HTTP server
 2. **Fetch script** pulls all workouts (metrics + GPS) from the phone to your Mac
 3. **Converter** produces FIT files ready for Garmin Connect
+4. **Upload script** pushes FIT files to Garmin Connect via the API
 
 ## Requirements
 
@@ -35,15 +36,15 @@ cd health-export
 Open the app on your iPhone, tap **Start**, then from your Mac:
 
 ```bash
-python3 fetch_healthkit.py <iphone-ip>
+python3 scripts/fetch_healthkit.py <iphone-ip>
 ```
 
-This pulls all Apple Watch workouts with full-resolution metrics and GPS routes into `healthkit_export/`. Keep the phone screen on while fetching — HealthKit data is inaccessible when the screen is locked.
+This pulls all Apple Watch workouts with full-resolution metrics and GPS routes into `apple_health_export/`. Keep the phone screen on while fetching — HealthKit data is inaccessible when the screen is locked.
 
 ### 3. Convert to FIT
 
 ```bash
-uv run convert_healthkit_to_fit.py healthkit_export
+uv run scripts/convert_healthkit_to_fit.py apple_health_export
 ```
 
 FIT files are written to `fit_files/`, organised by year and month.
@@ -51,14 +52,28 @@ FIT files are written to `fit_files/`, organised by year and month.
 Filter by activity type:
 
 ```bash
-uv run convert_healthkit_to_fit.py healthkit_export --activity running
+uv run scripts/convert_healthkit_to_fit.py apple_health_export --activity running
 ```
 
-### 4. Import to Garmin Connect
+### 4. Upload to Garmin Connect
 
-1. Go to [Garmin Connect](https://connect.garmin.com)
-2. Click **"+"** → Import Data
-3. Upload your FIT files (can select multiple)
+```bash
+# First time: log in and save tokens
+uv run scripts/login_garmin.py
+
+# Upload all FIT files
+uv run scripts/upload_to_garmin.py fit_files
+```
+
+Set `GARMIN_EMAIL` and `GARMIN_PASSWORD` as environment variables. MFA is supported — you'll be prompted for the code on first login. Tokens are saved to `~/.garmin_tokens/` for subsequent runs.
+
+Use `--dry-run` to preview without uploading:
+
+```bash
+uv run scripts/upload_to_garmin.py fit_files --dry-run
+```
+
+Or import manually: go to [Garmin Connect](https://connect.garmin.com), click **"+"** → Import Data, and upload your FIT files.
 
 ## What gets exported
 
@@ -97,7 +112,7 @@ The iOS app serves JSON on port 8080:
 For local development and testing without a phone:
 
 ```bash
-python3 mock_server.py
+python3 scripts/mock_server.py
 ```
 
 Serves sample workouts on `http://localhost:8080` with the same API as the iOS app.
@@ -105,10 +120,8 @@ Serves sample workouts on `http://localhost:8080` with the same API as the iOS a
 ### Tests
 
 ```bash
-uv run pytest -v
+uv run pytest tests/ -v
 ```
-
-44 tests, 91% coverage. Tests use the mock server — no phone required.
 
 ### CI
 

@@ -23,7 +23,7 @@ from fit_tool.profile.messages.session_message import SessionMessage
 from fit_tool.profile.messages.lap_message import LapMessage
 from fit_tool.profile.profile_type import Sport
 
-from convert_healthkit_to_fit import create_fit, parse_iso, to_fit_ts, SPORT_MAP, main
+from scripts.convert_healthkit_to_fit import create_fit, parse_iso, to_fit_ts, SPORT_MAP, main
 
 
 def make_workout(
@@ -249,8 +249,8 @@ class TestMergedStreams(unittest.TestCase):
         records = get_data_messages(parsed, RecordMessage)
 
         # We have GPS at t+0, t+12 and HR at t+0, t+10, t+20 and speed at t+3, t+13
-        # Total: 7 records, and they should be sorted
-        self.assertEqual(len(records), 7)
+        # Unique timestamps: {0, 3, 10, 12, 13, 20} = 6 records, sorted
+        self.assertEqual(len(records), 6)
 
         timestamps = [r.timestamp for r in records]
         self.assertEqual(timestamps, sorted(timestamps))
@@ -365,10 +365,86 @@ class TestMetricFields(unittest.TestCase):
         speed_count = sum(1 for r in records if r.enhanced_speed is not None)
         gps_count = sum(1 for r in records if r.position_lat is not None)
 
-        self.assertEqual(hr_count, 3)
-        self.assertEqual(power_count, 2)
-        self.assertEqual(speed_count, 2)
+        # With interpolation, all metrics are present on all 11 records
+        self.assertEqual(len(records), 11)
+        self.assertEqual(hr_count, 11)
+        self.assertEqual(power_count, 11)
+        self.assertEqual(speed_count, 11)
         self.assertEqual(gps_count, 2)
+
+
+class TestInterpolation(unittest.TestCase):
+    """Test that metric values are linearly interpolated between known points."""
+
+    def test_hr_interpolated_between_points(self):
+        """HR at t+5 should be midpoint between t+0 (140) and t+10 (155)."""
+        base_ts = datetime(2024, 1, 15, 8, 0, 0, tzinfo=timezone.utc).timestamp()
+        workout = make_workout()
+        metrics = {
+            'heart_rate': [
+                {'timestamp': base_ts + 0, 'date': '2024-01-15T08:00:00Z', 'value': 140},
+                {'timestamp': base_ts + 10, 'date': '2024-01-15T08:00:10Z', 'value': 160},
+            ],
+        }
+        # GPS at t+5 to force a record at the midpoint
+        trackpoints = [{
+            'time': datetime(2024, 1, 15, 8, 0, 5, tzinfo=timezone.utc),
+            'lat': 51.5074, 'lon': -0.1278, 'elevation': 10.0,
+        }]
+
+        fit_file = create_fit(workout, metrics, trackpoints)
+        parsed = write_fit_and_read_back(fit_file)
+        records = get_data_messages(parsed, RecordMessage)
+
+        # Find the record at t+5
+        target_ts = to_fit_ts(datetime(2024, 1, 15, 8, 0, 5, tzinfo=timezone.utc))
+        mid_records = [r for r in records if r.timestamp == target_ts]
+        self.assertEqual(len(mid_records), 1)
+        # Interpolated: 140 + (160-140) * 0.5 = 150
+        self.assertEqual(mid_records[0].heart_rate, 150)
+
+    def test_exact_timestamp_uses_exact_value(self):
+        """When a record falls on an exact metric timestamp, use that value."""
+        base_ts = datetime(2024, 1, 15, 8, 0, 0, tzinfo=timezone.utc).timestamp()
+        workout = make_workout()
+        metrics = {
+            'heart_rate': [
+                {'timestamp': base_ts + 0, 'date': '2024-01-15T08:00:00Z', 'value': 140},
+                {'timestamp': base_ts + 10, 'date': '2024-01-15T08:00:10Z', 'value': 160},
+            ],
+        }
+
+        fit_file = create_fit(workout, metrics, [])
+        parsed = write_fit_and_read_back(fit_file)
+        records = get_data_messages(parsed, RecordMessage)
+
+        hr_values = [r.heart_rate for r in records if r.heart_rate is not None]
+        self.assertIn(140, hr_values)
+        self.assertIn(160, hr_values)
+
+    def test_before_first_point_uses_first_value(self):
+        """Timestamps before the first metric point get the first value."""
+        base_ts = datetime(2024, 1, 15, 8, 0, 0, tzinfo=timezone.utc).timestamp()
+        workout = make_workout()
+        metrics = {
+            'heart_rate': [
+                {'timestamp': base_ts + 10, 'date': '2024-01-15T08:00:10Z', 'value': 150},
+            ],
+        }
+        trackpoints = [{
+            'time': datetime(2024, 1, 15, 8, 0, 0, tzinfo=timezone.utc),
+            'lat': 51.5074, 'lon': -0.1278, 'elevation': 10.0,
+        }]
+
+        fit_file = create_fit(workout, metrics, trackpoints)
+        parsed = write_fit_and_read_back(fit_file)
+        records = get_data_messages(parsed, RecordMessage)
+
+        # Record at t+0 should have HR=150 (first/only known value)
+        target_ts = to_fit_ts(datetime(2024, 1, 15, 8, 0, 0, tzinfo=timezone.utc))
+        early_records = [r for r in records if r.timestamp == target_ts]
+        self.assertEqual(len(early_records), 1)
+        self.assertEqual(early_records[0].heart_rate, 150)
 
 
 class TestSportTypeMapping(unittest.TestCase):
@@ -489,7 +565,7 @@ class TestIntegration(unittest.TestCase):
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self.hk_dir = os.path.join(self.tmpdir, 'healthkit_export')
+        self.hk_dir = os.path.join(self.tmpdir, 'apple_health_export')
         self.output_dir = os.path.join(self.tmpdir, 'fit_output')
         os.makedirs(self.hk_dir)
 

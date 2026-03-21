@@ -16,7 +16,10 @@ from fit_tool.profile.messages.event_message import EventMessage
 from fit_tool.profile.messages.lap_message import LapMessage
 from fit_tool.profile.messages.session_message import SessionMessage
 from fit_tool.profile.messages.activity_message import ActivityMessage
+from fit_tool.profile.messages.device_info_message import DeviceInfoMessage
 from fit_tool.profile.profile_type import Sport, Manufacturer, FileType, Event, EventType
+
+
 
 
 SPORT_MAP = {
@@ -54,6 +57,15 @@ def create_fit(workout, metrics, trackpoints):
     file_id.time_created = to_fit_ts(start)
     builder.add(file_id)
 
+    # Device info
+    device_info = DeviceInfoMessage()
+    device_info.timestamp = to_fit_ts(start)
+    device_info.manufacturer = Manufacturer.DEVELOPMENT
+    device_info.product = 0
+    device_info.device_index = 0
+    device_info.product_name = 'Apple Watch'
+    builder.add(device_info)
+
     # Timer start
     event = EventMessage()
     event.event = Event.TIMER
@@ -61,14 +73,8 @@ def create_fit(workout, metrics, trackpoints):
     event.timestamp = to_fit_ts(start)
     builder.add(event)
 
-    # Merge all streams into time-sorted records
-    events = []
-
-    # GPS trackpoints (from GPX or HealthKit route JSON)
-    for tp in trackpoints:
-        events.append((tp['time'], 'gps', tp))
-
-    # HealthKit metric streams
+    # Build per-second metric lookup from HealthKit streams
+    # Key: integer unix timestamp -> dict of metric values
     metric_map = {
         'heart_rate': 'heart_rate',
         'running_power': 'power',
@@ -78,33 +84,93 @@ def create_fit(workout, metrics, trackpoints):
         'stride_length': 'stride_length',
     }
 
+    # Build sorted timestamp arrays per metric for nearest-neighbour lookup
+    from bisect import bisect_left
+
+    metric_streams = {}  # fit_key -> sorted list of (timestamp, value)
     for hk_key, fit_key in metric_map.items():
-        for point in metrics.get(hk_key, []):
-            ts = datetime.fromtimestamp(point['timestamp'], tz=timezone.utc)
-            events.append((ts, fit_key, point['value']))
+        points = metrics.get(hk_key, [])
+        if points:
+            metric_streams[fit_key] = sorted(
+                [(int(p['timestamp']), p['value']) for p in points]
+            )
 
-    events.sort(key=lambda e: e[0])
+    # Build GPS lookup by integer timestamp
+    gps_lookup = {}
+    for tp in trackpoints:
+        ts_key = int(tp['time'].timestamp())
+        gps_lookup[ts_key] = tp
 
-    for ts, source, data in events:
+    # Collect all unique timestamps from GPS and metrics
+    all_metric_ts = set()
+    for stream in metric_streams.values():
+        all_metric_ts.update(ts for ts, _ in stream)
+    all_timestamps = sorted(set(list(all_metric_ts) + list(gps_lookup.keys())))
+
+    def interpolate(stream, ts_key):
+        """Linearly interpolate between the two nearest points in a stream.
+
+        Returns the exact value if the timestamp matches a data point,
+        a linearly interpolated value if between two points, or the
+        boundary value if before the first / after the last point.
+        """
+        if not stream:
+            return None
+        timestamps = [t for t, _ in stream]
+        idx = bisect_left(timestamps, ts_key)
+
+        # Exact match
+        if idx < len(stream) and stream[idx][0] == ts_key:
+            return stream[idx][1]
+
+        # Before first or after last data point
+        if idx == 0:
+            return stream[0][1]
+        if idx >= len(stream):
+            return stream[-1][1]
+
+        # Interpolate between stream[idx-1] and stream[idx]
+        t0, v0 = stream[idx - 1]
+        t1, v1 = stream[idx]
+        frac = (ts_key - t0) / (t1 - t0)
+        return v0 + (v1 - v0) * frac
+
+    for ts_key in all_timestamps:
         record = RecordMessage()
+        ts = datetime.fromtimestamp(ts_key, tz=timezone.utc)
         record.timestamp = to_fit_ts(ts)
 
-        if source == 'gps':
-            record.position_lat = data.get('lat') or data.get('latitude')
-            record.position_long = data.get('lon') or data.get('longitude')
-            record.enhanced_altitude = data.get('elevation') or data.get('altitude', 0)
-        elif source == 'heart_rate':
-            record.heart_rate = min(int(data), 255)
-        elif source == 'power':
-            record.power = int(data)
-        elif source == 'speed':
-            record.enhanced_speed = data  # already m/s
-        elif source == 'vertical_oscillation':
-            record.vertical_oscillation = data * 10  # cm -> mm
-        elif source == 'ground_contact_time':
-            record.stance_time = data  # already ms
-        elif source == 'stride_length':
-            record.step_length = data * 1000  # m -> mm
+        # GPS data
+        if ts_key in gps_lookup:
+            tp = gps_lookup[ts_key]
+            record.position_lat = tp.get('lat') or tp.get('latitude')
+            record.position_long = tp.get('lon') or tp.get('longitude')
+            record.enhanced_altitude = tp.get('elevation') or tp.get('altitude', 0)
+
+        # Apply interpolated metric values
+        hr = interpolate(metric_streams.get('heart_rate', []), ts_key)
+        if hr is not None:
+            record.heart_rate = min(int(hr), 255)
+
+        power = interpolate(metric_streams.get('power', []), ts_key)
+        if power is not None:
+            record.power = int(power)
+
+        speed = interpolate(metric_streams.get('speed', []), ts_key)
+        if speed is not None:
+            record.enhanced_speed = speed
+
+        vo = interpolate(metric_streams.get('vertical_oscillation', []), ts_key)
+        if vo is not None:
+            record.vertical_oscillation = vo * 10  # cm -> mm
+
+        gct = interpolate(metric_streams.get('ground_contact_time', []), ts_key)
+        if gct is not None:
+            record.stance_time = gct  # already ms
+
+        sl = interpolate(metric_streams.get('stride_length', []), ts_key)
+        if sl is not None:
+            record.step_length = sl * 1000  # m -> mm
 
         builder.add(record)
 
@@ -157,7 +223,7 @@ def create_fit(workout, metrics, trackpoints):
 def main():
     parser = argparse.ArgumentParser(
         description='Convert HealthKit JSON export to FIT for Garmin Connect')
-    parser.add_argument('healthkit_dir', help='Path to healthkit_export directory')
+    parser.add_argument('healthkit_dir', help='Path to apple_health_export directory')
     parser.add_argument('--output', '-o', help='Output directory for FIT files')
     parser.add_argument('--activity', '-a', help='Filter by activity type')
     args = parser.parse_args()
@@ -180,7 +246,8 @@ def main():
     converted = 0
     skipped = 0
 
-    for wf in workout_files:
+    total = len(workout_files)
+    for i, wf in enumerate(workout_files, 1):
         data = json.load(open(wf))
         workout = data['workout']
         metrics = data['metrics']
@@ -193,6 +260,7 @@ def main():
         total_points = sum(len(v) for v in metrics.values() if isinstance(v, list))
         if total_points == 0:
             skipped += 1
+            print(f"[{i}/{total}] Skipped (no metrics): {wf.name}")
             continue
 
         # GPS data from HealthKit route
@@ -217,14 +285,13 @@ def main():
             fit_file.to_file(str(year_month_dir / filename))
 
             hr_count = len(metrics.get('heart_rate', []))
-            print(f"Converted: {filename} ({total_points} points, {hr_count} HR, {len(trackpoints)} GPS)")
+            print(f"[{i}/{total}] {filename} ({total_points} points, {hr_count} HR, {len(trackpoints)} GPS)")
             converted += 1
         except Exception as e:
-            print(f"Error converting {wf.name}: {e}")
+            print(f"[{i}/{total}] Error: {wf.name} — {e}")
 
-    print(f"\nConverted {converted} workouts to {output_dir}")
-    if skipped:
-        print(f"Skipped {skipped} workouts with no metric data")
+    print(f"\nDone: {converted} converted, {skipped} skipped")
+    print(f"Output: {output_dir}")
 
 
 if __name__ == '__main__':

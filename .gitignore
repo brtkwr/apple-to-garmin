@@ -53,4 +53,7 @@ xcuserdata/
 *.xcuserstate
 
 # HealthKit export data
-healthkit_export/
+apple_health_export*
+
+# Local data
+garmin_activities.txt

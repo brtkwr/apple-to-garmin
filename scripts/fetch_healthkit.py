@@ -23,7 +23,7 @@ def main():
     host = sys.argv[1] if len(sys.argv) > 1 else "192.168.1.152"
     port = sys.argv[2] if len(sys.argv) > 2 else "8080"
     base = f"http://{host}:{port}"
-    output_dir = Path(sys.argv[3]) if len(sys.argv) > 3 else Path("healthkit_export")
+    output_dir = Path(sys.argv[3]) if len(sys.argv) > 3 else Path("apple_health_export")
     output_dir.mkdir(exist_ok=True)
 
     print(f"Fetching workouts from {base}...")

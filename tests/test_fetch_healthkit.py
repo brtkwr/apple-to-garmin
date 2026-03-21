@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mock_server import start_mock_server
+from scripts.mock_server import start_mock_server
 
 
 class TestFetchHealthkit(unittest.TestCase):
@@ -35,7 +35,7 @@ class TestFetchHealthkit(unittest.TestCase):
         old_argv = sys.argv
         sys.argv = ["fetch_healthkit.py", host, str(port), str(output_dir)]
         try:
-            from fetch_healthkit import main
+            from scripts.fetch_healthkit import main
             main()
         finally:
             sys.argv = old_argv
