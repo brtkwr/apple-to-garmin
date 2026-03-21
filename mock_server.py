@@ -168,16 +168,6 @@ class MockHealthKitHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": f"Workout not found at index {idx}"}, 404)
             return
 
-        match = re.match(r"^/workouts/(\d+)/route$", self.path)
-        if match:
-            idx = int(match.group(1))
-            if 0 <= idx < len(self.workouts or []):
-                metrics = generate_sample_metrics(self.workouts[idx])
-                self._send_json(metrics.get("route", []))
-            else:
-                self._send_json({"error": f"Workout not found at index {idx}"}, 404)
-            return
-
         self._send_json({"error": "Not found"}, 404)
 
     def _send_json(self, data, status=200):
@@ -221,7 +211,7 @@ def main():
     print("Endpoints:")
     print("  GET /workouts")
     print("  GET /workouts/{index}/metrics")
-    print("  GET /workouts/{index}/route")
+    print("  GET /workouts/{index}/heart_rate")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

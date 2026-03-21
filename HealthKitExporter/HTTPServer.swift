@@ -128,18 +128,8 @@ final class HTTPServer: ObservableObject {
             return
         }
 
-        if let index = parseWorkoutSubpath(path: path, suffix: "heart_rate") {
-            await handleGetHeartRate(connection: connection, index: index)
-            return
-        }
-
         if let index = parseWorkoutSubpath(path: path, suffix: "metrics") {
             await handleGetMetrics(connection: connection, index: index)
-            return
-        }
-
-        if let index = parseWorkoutSubpath(path: path, suffix: "route") {
-            await handleGetRoute(connection: connection, index: index)
             return
         }
 
@@ -188,42 +178,6 @@ final class HTTPServer: ObservableObject {
     }
 
     @MainActor
-    private func handleGetHeartRate(connection: NWConnection, index: Int) async {
-        guard let manager = healthKitManager else {
-            sendResponse(
-                connection: connection, status: 500,
-                body: "{\"error\": \"HealthKit not available\"}")
-            return
-        }
-
-        do {
-            if cachedWorkouts == nil {
-                cachedWorkouts = try await manager.fetchWorkouts()
-            }
-
-            guard let workouts = cachedWorkouts, index >= 0, index < workouts.count else {
-                sendResponse(
-                    connection: connection, status: 404,
-                    body: "{\"error\": \"Workout not found at index \(index)\"}")
-                return
-            }
-
-            let workout = workouts[index]
-            let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
-            let hrUnit = HKUnit.count().unitDivided(by: .minute())
-            let hrData = try await manager.fetchQuantitySeries(
-                for: workout, quantityType: hrType, unit: hrUnit)
-            log("/workouts/\(index)/heart_rate", status: 200, detail: "\(hrData.count) points")
-            sendJSONResponse(connection: connection, object: hrData)
-        } catch {
-            log("/workouts/\(index)/heart_rate", status: 500, detail: error.localizedDescription)
-            sendResponse(
-                connection: connection, status: 500,
-                body: "{\"error\": \"\(error.localizedDescription)\"}")
-        }
-    }
-
-    @MainActor
     private func handleGetMetrics(connection: NWConnection, index: Int) async {
         guard let manager = healthKitManager else {
             sendResponse(
@@ -245,42 +199,12 @@ final class HTTPServer: ObservableObject {
             }
 
             let metrics = try await manager.fetchAllMetrics(for: workouts[index])
-            let totalPoints = (metrics.values.compactMap { ($0 as? [[String: Any]])?.count }.reduce(0, +))
-            log("/workouts/\(index)/metrics", status: 200, detail: "\(totalPoints) points")
+            let routeCount = (metrics["route"] as? [[String: Any]])?.count ?? 0
+            let metricCount = metrics.values.compactMap { ($0 as? [[String: Any]])?.count }.reduce(0, +) - routeCount
+            log("/workouts/\(index)/metrics", status: 200, detail: "\(metricCount) metrics, \(routeCount) GPS")
             sendJSONResponse(connection: connection, object: metrics)
         } catch {
             log("/workouts/\(index)/metrics", status: 500, detail: error.localizedDescription)
-            sendResponse(
-                connection: connection, status: 500,
-                body: "{\"error\": \"\(error.localizedDescription)\"}")
-        }
-    }
-
-    @MainActor
-    private func handleGetRoute(connection: NWConnection, index: Int) async {
-        guard let manager = healthKitManager else {
-            sendResponse(
-                connection: connection, status: 500,
-                body: "{\"error\": \"HealthKit not available\"}")
-            return
-        }
-
-        do {
-            if cachedWorkouts == nil {
-                cachedWorkouts = try await manager.fetchWorkouts()
-            }
-
-            guard let workouts = cachedWorkouts, index >= 0, index < workouts.count else {
-                sendResponse(
-                    connection: connection, status: 404,
-                    body: "{\"error\": \"Workout not found at index \(index)\"}")
-                return
-            }
-
-            let route = try await manager.fetchRoute(for: workouts[index])
-            log("/workouts/\(index)/route", status: 200, detail: "\(route.count) points")
-            sendJSONResponse(connection: connection, object: route)
-        } catch {
             sendResponse(
                 connection: connection, status: 500,
                 body: "{\"error\": \"\(error.localizedDescription)\"}")

@@ -125,12 +125,6 @@ class TestMockServer(unittest.TestCase):
             self._fetch("/workouts/999/metrics")
         self.assertEqual(ctx.exception.code, 404)
 
-    def test_route_endpoint(self):
-        data = self._fetch("/workouts/0/route")
-        self.assertIsInstance(data, list)
-        self.assertGreater(len(data), 0)
-        self.assertIn("latitude", data[0])
-
     def test_404_for_unknown_path(self):
         import urllib.error
         with self.assertRaises(urllib.error.HTTPError) as ctx:
