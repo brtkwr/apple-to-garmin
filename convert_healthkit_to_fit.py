@@ -65,7 +65,7 @@ def create_fit(workout, metrics, trackpoints):
     # Merge all streams into time-sorted records
     events = []
 
-    # GPS trackpoints
+    # GPS trackpoints (from GPX or HealthKit route JSON)
     for tp in trackpoints:
         events.append((tp['time'], 'gps', tp))
 
@@ -91,9 +91,9 @@ def create_fit(workout, metrics, trackpoints):
         record.timestamp = to_fit_ts(ts)
 
         if source == 'gps':
-            record.position_lat = data['lat']
-            record.position_long = data['lon']
-            record.enhanced_altitude = data['elevation']
+            record.position_lat = data.get('lat') or data.get('latitude')
+            record.position_long = data.get('lon') or data.get('longitude')
+            record.enhanced_altitude = data.get('elevation') or data.get('altitude', 0)
         elif source == 'heart_rate':
             record.heart_rate = min(int(data), 255)
         elif source == 'power':
@@ -211,12 +211,23 @@ def main():
             skipped += 1
             continue
 
-        # Find GPS data
-        trackpoints = []
-        if routes_dir:
+        # GPS data — prefer HealthKit route, fall back to GPX files
+        route_data = data.get('route', [])
+        if route_data:
+            trackpoints = []
+            for pt in route_data:
+                ts = datetime.fromtimestamp(pt['timestamp'], tz=timezone.utc)
+                trackpoints.append({
+                    'time': ts,
+                    'lat': pt['latitude'],
+                    'lon': pt['longitude'],
+                    'elevation': pt['altitude'],
+                })
+        elif routes_dir:
             gpx_file = find_gpx_file(workout, routes_dir)
-            if gpx_file:
-                trackpoints = parse_gpx_file(gpx_file)
+            trackpoints = parse_gpx_file(gpx_file) if gpx_file else []
+        else:
+            trackpoints = []
 
         try:
             fit_file = create_fit(workout, metrics, trackpoints)

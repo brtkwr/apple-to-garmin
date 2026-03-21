@@ -164,6 +164,11 @@ final class HTTPServer: ObservableObject {
             return
         }
 
+        if let index = parseWorkoutSubpath(path: path, suffix: "route") {
+            await handleGetRoute(connection: connection, index: index)
+            return
+        }
+
         sendResponse(connection: connection, status: 404, body: "{\"error\": \"Not found\"}")
     }
 
@@ -263,6 +268,36 @@ final class HTTPServer: ObservableObject {
 
             let metrics = try await manager.fetchAllMetrics(for: workouts[index])
             sendJSONResponse(connection: connection, object: metrics)
+        } catch {
+            sendResponse(
+                connection: connection, status: 500,
+                body: "{\"error\": \"\(error.localizedDescription)\"}")
+        }
+    }
+
+    @MainActor
+    private func handleGetRoute(connection: NWConnection, index: Int) async {
+        guard let manager = healthKitManager else {
+            sendResponse(
+                connection: connection, status: 500,
+                body: "{\"error\": \"HealthKit not available\"}")
+            return
+        }
+
+        do {
+            if cachedWorkouts == nil {
+                cachedWorkouts = try await manager.fetchWorkouts()
+            }
+
+            guard let workouts = cachedWorkouts, index >= 0, index < workouts.count else {
+                sendResponse(
+                    connection: connection, status: 404,
+                    body: "{\"error\": \"Workout not found at index \(index)\"}")
+                return
+            }
+
+            let route = try await manager.fetchRoute(for: workouts[index])
+            sendJSONResponse(connection: connection, object: route)
         } catch {
             sendResponse(
                 connection: connection, status: 500,
