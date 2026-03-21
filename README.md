@@ -6,9 +6,17 @@ Apple's "Export All Health Data" aggregates workout heart rate into low-resoluti
 
 ## How it works
 
+```mermaid
+graph LR
+    A[HealthKit on iPhone] -->|HTTP JSON| B[fetch_healthkit.py]
+    B -->|apple_health_export/*.json| C[convert_healthkit_to_fit.py]
+    C -->|fit_files/*.fit| D[upload_to_garmin.py]
+    D -->|Garmin API| E[Garmin Connect]
+```
+
 1. **iOS app** serves workout data from HealthKit over a local HTTP server
 2. **Fetch script** pulls all workouts (metrics + GPS) from the phone to your Mac
-3. **Converter** produces FIT files ready for Garmin Connect
+3. **Converter** produces FIT files with linearly interpolated metrics
 4. **Upload script** pushes FIT files to Garmin Connect via the API
 
 ## Requirements
