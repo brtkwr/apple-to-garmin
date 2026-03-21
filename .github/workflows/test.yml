@@ -5,6 +5,7 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -66,3 +67,21 @@ jobs:
       run: |
         python -m py_compile convert_healthkit_to_fit.py
         python -m py_compile fetch_healthkit.py
+
+  build-ios:
+    runs-on: macos-latest
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🍎 Build iOS app
+      run: |
+        xcodebuild -project HealthKitExporter.xcodeproj \
+          -scheme HealthKitExporter \
+          -destination 'generic/platform=iOS Simulator' \
+          -allowProvisioningUpdates \
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGNING_ALLOWED=NO \
+          build
