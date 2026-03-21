@@ -43,13 +43,7 @@ temp/
 tmp/
 
 # Output files
-tcx_files/
 fit_files/
-no_heart_rate/
-
-# Apple Health export data
-apple_health_export/
-export.zip
 
 # Virtual environment
 .venv/
@@ -60,4 +54,3 @@ xcuserdata/
 
 # HealthKit export data
 healthkit_export/
-fit_files_hk/
