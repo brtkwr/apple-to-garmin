@@ -23,7 +23,7 @@ from fit_tool.profile.messages.session_message import SessionMessage
 from fit_tool.profile.messages.lap_message import LapMessage
 from fit_tool.profile.profile_type import Sport
 
-from scripts.convert_healthkit_to_fit import create_fit, parse_iso, to_fit_ts, SPORT_MAP, main
+from health_export.convert_healthkit_to_fit import create_fit, parse_iso, to_fit_ts, SPORT_MAP, main
 
 
 def make_workout(

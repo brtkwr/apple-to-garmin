@@ -35,7 +35,7 @@ jobs:
 
     - name: 🧪 Run tests
       run: |
-        uv run pytest tests/ --cov=scripts --cov-report=xml:coverage.xml --cov-report=term-missing -v
+        uv run pytest tests/ --cov=health_export --cov-report=xml:coverage.xml --cov-report=term-missing -v
 
     - name: 📊 Coverage report
       uses: orgoro/coverage@v3.2
@@ -46,7 +46,7 @@ jobs:
 
     - name: 🔍 Run basic smoke tests
       run: |
-        uv run python scripts/convert_healthkit_to_fit.py --help
+        uv run python health_export/convert_healthkit_to_fit.py --help
 
   lint:
     runs-on: ubuntu-latest
@@ -65,10 +65,10 @@ jobs:
 
     - name: 🔍 Check Python syntax
       run: |
-        python -m py_compile scripts/convert_healthkit_to_fit.py
-        python -m py_compile scripts/fetch_healthkit.py
-        python -m py_compile scripts/upload_to_garmin.py
-        python -m py_compile scripts/login_garmin.py
+        python -m py_compile health_export/convert_healthkit_to_fit.py
+        python -m py_compile health_export/fetch_healthkit.py
+        python -m py_compile health_export/upload_to_garmin.py
+        python -m py_compile health_export/login_garmin.py
 
   build-ios:
     runs-on: macos-latest

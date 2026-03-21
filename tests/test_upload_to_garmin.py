@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch, PropertyMock
 
-from scripts.upload_to_garmin import find_fit_files, upload, get_client
+from health_export.upload_to_garmin import find_fit_files, upload, get_client
 
 
 class TestFindFitFiles(unittest.TestCase):
@@ -144,8 +144,8 @@ class TestUploadWithMockedApi(unittest.TestCase):
 
 class TestGetClient(unittest.TestCase):
 
-    @patch("scripts.upload_to_garmin.TOKENSTORE")
-    @patch("scripts.upload_to_garmin.Garmin")
+    @patch("health_export.upload_to_garmin.TOKENSTORE")
+    @patch("health_export.upload_to_garmin.Garmin")
     def test_login_with_saved_tokens(self, MockGarmin, mock_tokenstore):
         mock_tokenstore.exists.return_value = True
         mock_client = MagicMock()
@@ -156,8 +156,8 @@ class TestGetClient(unittest.TestCase):
         mock_client.login.assert_called_once_with(tokenstore=str(mock_tokenstore))
         self.assertEqual(result, mock_client)
 
-    @patch("scripts.upload_to_garmin.TOKENSTORE")
-    @patch("scripts.upload_to_garmin.Garmin")
+    @patch("health_export.upload_to_garmin.TOKENSTORE")
+    @patch("health_export.upload_to_garmin.Garmin")
     def test_expired_tokens_falls_back_to_credentials(self, MockGarmin, mock_tokenstore):
         mock_tokenstore.exists.return_value = True
         mock_client = MagicMock()
@@ -170,16 +170,16 @@ class TestGetClient(unittest.TestCase):
         self.assertEqual(mock_client.login.call_count, 2)
         self.assertEqual(result, mock_client)
 
-    @patch("scripts.upload_to_garmin.TOKENSTORE")
-    @patch("scripts.upload_to_garmin.Garmin")
+    @patch("health_export.upload_to_garmin.TOKENSTORE")
+    @patch("health_export.upload_to_garmin.Garmin")
     def test_no_tokens_no_credentials_exits(self, MockGarmin, mock_tokenstore):
         mock_tokenstore.exists.return_value = False
 
         with self.assertRaises(SystemExit):
             get_client(None, None)
 
-    @patch("scripts.upload_to_garmin.TOKENSTORE")
-    @patch("scripts.upload_to_garmin.Garmin")
+    @patch("health_export.upload_to_garmin.TOKENSTORE")
+    @patch("health_export.upload_to_garmin.Garmin")
     def test_no_tokens_with_credentials_logs_in(self, MockGarmin, mock_tokenstore):
         mock_tokenstore.exists.return_value = False
         mock_client = MagicMock()
@@ -194,30 +194,30 @@ class TestGetClient(unittest.TestCase):
 
 class TestMainCli(unittest.TestCase):
 
-    @patch("scripts.upload_to_garmin.upload")
-    @patch("scripts.upload_to_garmin.find_fit_files")
+    @patch("health_export.upload_to_garmin.upload")
+    @patch("health_export.upload_to_garmin.find_fit_files")
     def test_main_dry_run(self, mock_find, mock_upload):
         mock_find.return_value = [Path("a.fit")]
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "a.fit").touch()
             with patch("sys.argv", ["upload_to_garmin.py", tmpdir, "--dry-run"]):
-                from scripts.upload_to_garmin import main
+                from health_export.upload_to_garmin import main
                 main()
 
         mock_upload.assert_called_once_with(None, [Path("a.fit")], dry_run=True)
 
     def test_main_missing_directory_exits(self):
         with patch("sys.argv", ["upload_to_garmin.py", "/nonexistent/path"]):
-            from scripts.upload_to_garmin import main
+            from health_export.upload_to_garmin import main
             with self.assertRaises(SystemExit):
                 main()
 
-    @patch("scripts.upload_to_garmin.find_fit_files")
+    @patch("health_export.upload_to_garmin.find_fit_files")
     def test_main_no_fit_files_exits(self, mock_find):
         mock_find.return_value = []
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("sys.argv", ["upload_to_garmin.py", tmpdir]):
-                from scripts.upload_to_garmin import main
+                from health_export.upload_to_garmin import main
                 with self.assertRaises(SystemExit):
                     main()
 

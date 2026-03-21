@@ -57,3 +57,4 @@ apple_health_export*
 
 # Local data
 garmin_activities.txt
+.envrc

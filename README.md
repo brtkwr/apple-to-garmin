@@ -44,7 +44,7 @@ cd apple-health-export
 Open the app on your iPhone, tap **Start**, then from your Mac:
 
 ```bash
-python3 scripts/fetch_healthkit.py <iphone-ip>
+python3 health_export/fetch_healthkit.py <iphone-ip>
 ```
 
 This pulls all Apple Watch workouts with full-resolution metrics and GPS routes into `apple_health_export/`. Keep the phone screen on while fetching — HealthKit data is inaccessible when the screen is locked.
@@ -52,7 +52,7 @@ This pulls all Apple Watch workouts with full-resolution metrics and GPS routes 
 ### 3. Convert to FIT
 
 ```bash
-uv run scripts/convert_healthkit_to_fit.py apple_health_export
+uv run health_export/convert_healthkit_to_fit.py apple_health_export
 ```
 
 FIT files are written to `fit_files/`, organised by year and month.
@@ -60,17 +60,17 @@ FIT files are written to `fit_files/`, organised by year and month.
 Filter by activity type:
 
 ```bash
-uv run scripts/convert_healthkit_to_fit.py apple_health_export --activity running
+uv run health_export/convert_healthkit_to_fit.py apple_health_export --activity running
 ```
 
 ### 4. Upload to Garmin Connect
 
 ```bash
 # First time: log in and save tokens
-uv run scripts/login_garmin.py
+uv run health_export/login_garmin.py
 
 # Upload all FIT files
-uv run scripts/upload_to_garmin.py fit_files
+uv run health_export/upload_to_garmin.py fit_files
 ```
 
 Set `GARMIN_EMAIL` and `GARMIN_PASSWORD` as environment variables. MFA is supported — you'll be prompted for the code on first login. Tokens are saved to `~/.garmin_tokens/` for subsequent runs.
@@ -78,7 +78,7 @@ Set `GARMIN_EMAIL` and `GARMIN_PASSWORD` as environment variables. MFA is suppor
 Use `--dry-run` to preview without uploading:
 
 ```bash
-uv run scripts/upload_to_garmin.py fit_files --dry-run
+uv run health_export/upload_to_garmin.py fit_files --dry-run
 ```
 
 Or import manually: go to [Garmin Connect](https://connect.garmin.com), click **"+"** → Import Data, and upload your FIT files.
@@ -120,7 +120,7 @@ The iOS app serves JSON on port 8080:
 For local development and testing without a phone:
 
 ```bash
-python3 scripts/mock_server.py
+python3 tests/mock_server.py
 ```
 
 Serves sample workouts on `http://localhost:8080` with the same API as the iOS app.
