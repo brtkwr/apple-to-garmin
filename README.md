@@ -20,8 +20,8 @@ Apple's "Export All Health Data" aggregates workout heart rate into low-resoluti
 ## Quick start
 
 ```bash
-git clone https://github.com/brtkwr/health-export.git
-cd health-export
+git clone https://github.com/brtkwr/apple-health-export.git
+cd apple-health-export
 ```
 
 ### 1. Install the iOS app
