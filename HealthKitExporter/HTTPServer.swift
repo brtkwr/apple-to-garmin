@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import HealthKit
 import Network
@@ -12,8 +13,13 @@ final class HTTPServer: ObservableObject {
 
     private var listener: NWListener?
     private var cachedWorkouts: [HKWorkout]?
+    private var audioPlayer: AVAudioPlayer?
 
     func start() {
+        // Stop any existing listener first
+        listener?.cancel()
+        listener = nil
+
         do {
             let params = NWParameters.tcp
             params.allowLocalEndpointReuse = true
@@ -49,6 +55,7 @@ final class HTTPServer: ObservableObject {
 
         listener?.start(queue: .global(qos: .userInitiated))
         localIPAddress = Self.getLocalIPAddress()
+        startBackgroundAudio()
     }
 
     func stop() {
@@ -56,6 +63,42 @@ final class HTTPServer: ObservableObject {
         listener = nil
         isRunning = false
         cachedWorkouts = nil
+        audioPlayer?.stop()
+        audioPlayer = nil
+    }
+
+    // Keep the app alive when screen is off by playing silent audio
+    private func startBackgroundAudio() {
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .default, options: .mixWithOthers)
+        try? session.setActive(true)
+
+        // Generate 1 second of silence
+        let sampleRate = 44100.0
+        let samples = Int(sampleRate)
+        var data = Data()
+        // WAV header
+        let dataSize = UInt32(samples * 2)
+        let fileSize = UInt32(36 + dataSize)
+        data.append(contentsOf: "RIFF".utf8)
+        data.append(contentsOf: withUnsafeBytes(of: fileSize.littleEndian) { Array($0) })
+        data.append(contentsOf: "WAVE".utf8)
+        data.append(contentsOf: "fmt ".utf8)
+        data.append(contentsOf: withUnsafeBytes(of: UInt32(16).littleEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Array($0) })  // PCM
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Array($0) })  // mono
+        data.append(contentsOf: withUnsafeBytes(of: UInt32(44100).littleEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt32(88200).littleEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(2).littleEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(16).littleEndian) { Array($0) })
+        data.append(contentsOf: "data".utf8)
+        data.append(contentsOf: withUnsafeBytes(of: dataSize.littleEndian) { Array($0) })
+        data.append(Data(count: Int(dataSize)))  // silence
+
+        audioPlayer = try? AVAudioPlayer(data: data)
+        audioPlayer?.numberOfLoops = -1  // loop forever
+        audioPlayer?.volume = 0
+        audioPlayer?.play()
     }
 
     // MARK: - Connection handling
